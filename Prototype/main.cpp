@@ -36,7 +36,7 @@ const float PI = 3.1415926535f;
 const float FAR_PLANE = 260.0f;
 const int SHADOW_SIZE = 2048;
 
-const float CS = 30.0f;             // 블럭 하나의 월드 크기 (캐릭터/발판 크기는 그대로, 맵만 2.5배)
+const float CS = 21.0f;             // 블럭 하나의 월드 크기 (캐릭터 키 1.75 의 12배)
 const float HALF = CS * 0.5f;
 const float SLAB = 0.4f;            // 블럭 바닥 두께 (높이 h 는 블럭 밑면에서 잰다)
 
@@ -124,6 +124,16 @@ glm::mat4 alignY(glm::vec3 d) {
     if (d.x < -0.5f) return rotZ(PI * 0.5f);
     if (d.z > 0.5f) return rotX(PI * 0.5f);
     return rotX(-PI * 0.5f);
+}
+
+// a 에서 b 로 뻗는 막대: 지역 Y 축이 a->b 방향, 원점이 가운데 (길이는 scale 로)
+glm::mat4 beamMat(glm::vec3 a, glm::vec3 b) {
+    glm::vec3 y = b - a;
+    float len = glm::length(y);
+    y = len > 1e-5f ? y / len : glm::vec3(0, 1, 0);
+    glm::vec3 ref = fabsf(y.y) < 0.9f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
+    glm::vec3 x = glm::normalize(glm::cross(ref, y)), z = glm::cross(x, y);
+    return glm::mat4(glm::vec4(x, 0), glm::vec4(y, 0), glm::vec4(z, 0), glm::vec4((a + b) * 0.5f, 1));
 }
 
 // ===================================================================
@@ -237,7 +247,7 @@ const Theme THEMES[10] = {
 };
 
 const float TILE = CS / 3.0f;
-const float EXIT_H = CS - 1.8f;     // 오르막 꼭대기 발판 높이: 한 번 점프로 위 블럭 바닥(30.4)에 올라선다
+const float EXIT_H = CS - 1.8f;     // 오르막 꼭대기 발판 높이: 한 번 점프로 위 블럭 바닥(CS + 0.4)에 올라선다
 
 // 발판 경로: 블럭 가운데를 도는 사각 둘레를 따라 일정 간격으로 놓고 높이를 조금씩 올린다
 struct RStep { float x, z, h; };
@@ -266,21 +276,21 @@ std::vector<RStep> squareRoute(const RouteSpec& sp) {
 std::vector<RStep> ROUTE[10];           // 컨셉별 발판 경로
 int EXIT_T[10][2];                      // 오르막이 끝나는 타일 (-1 이면 없음)
 std::vector<glm::vec3> ANCHOR[10];      // 톱니를 띄울 자리 (x, h, z)
-const glm::vec2 LADDER_XZ(10.0f, -CS * 0.5f + 1.4f);
-const glm::vec2 PAD0_XZ(-8.0f, -8.0f);
+const glm::vec2 LADDER_XZ(CS / 3.0f, -CS * 0.5f + 1.4f);
+const glm::vec2 PAD0_XZ(-5.6f, -5.6f);
 
 int tileOf(float v) { return glm::clamp((int)lroundf((v + TILE) / TILE), 0, 2); }
 
 void initThemes() {
     // r, u0, dir, 간격, 오름, 교대 오름(2단 점프), 시작 높이, 건너뛰기
     RouteSpec spec[10] = {};
-    spec[TH_GEAR] = { 10.0f, 0.0f, 1, 3.8f, 2.0f, 0.0f, 2.4f, 0 };
-    spec[TH_CONVEYOR] = { 10.0f, 20.0f, 1, 3.6f, 2.0f, 0.0f, 2.4f, 0 };
-    spec[TH_PRESS] = { 9.0f, 36.0f, -1, 4.0f, 2.0f, 3.0f, 2.4f, 0 };
-    spec[TH_SUPERVISOR] = { 11.0f, 66.0f, 1, 3.4f, 2.0f, 0.0f, 2.4f, 0 };
-    spec[TH_FEEDING] = { 8.0f, 0.0f, 1, 5.0f, 5.5f, 0.0f, 6.4f, 1 };
-    spec[TH_CLOCK] = { 11.0f, 22.0f, -1, 3.4f, 2.0f, 0.0f, 2.4f, 0 };
-    spec[TH_START] = { 10.0f, 20.0f, 1, 3.6f, 2.0f, 0.0f, 2.4f, 0 };
+    spec[TH_GEAR] = { 7.0f, 0.0f, 1, 3.8f, 2.0f, 0.0f, 2.4f, 0 };
+    spec[TH_CONVEYOR] = { 7.0f, 14.0f, 1, 3.6f, 2.0f, 0.0f, 2.4f, 0 };
+    spec[TH_PRESS] = { 6.3f, 25.2f, -1, 4.0f, 2.0f, 3.0f, 2.4f, 0 };
+    spec[TH_SUPERVISOR] = { 7.7f, 46.2f, 1, 3.4f, 2.0f, 0.0f, 2.4f, 0 };
+    spec[TH_FEEDING] = { 5.6f, 0.0f, 1, 5.0f, 5.5f, 0.0f, 6.4f, 1 };
+    spec[TH_CLOCK] = { 7.7f, 15.4f, -1, 3.4f, 2.0f, 0.0f, 2.4f, 0 };
+    spec[TH_START] = { 7.0f, 14.0f, 1, 3.6f, 2.0f, 0.0f, 2.4f, 0 };
     for (int t = 0; t < 10; ++t) {
         ROUTE[t].clear();
         ANCHOR[t].clear();
@@ -301,11 +311,11 @@ void initThemes() {
     }
     // 보일러: 가운데 증기 승강기 (+ 높이 10, 20 의 둘레 발판)
     EXIT_T[TH_BOILER][0] = EXIT_T[TH_BOILER][1] = 1;
-    ANCHOR[TH_BOILER] = { { 5.0f, 11.8f, 0.0f }, { 0.0f, 21.8f, -5.0f } };
+    ANCHOR[TH_BOILER] = { { 3.6f, CS / 3.0f + 1.8f, 0.0f }, { 0.0f, CS * 2.0f / 3.0f + 1.8f, -3.6f } };
     // 작업대: 한쪽 가장자리 사다리 (+ 쉼터 발판)
     EXIT_T[TH_BENCH][0] = tileOf(LADDER_XZ.x);
     EXIT_T[TH_BENCH][1] = tileOf(LADDER_XZ.y);
-    ANCHOR[TH_BENCH] = { { LADDER_XZ.x + 2.6f, 11.8f, LADDER_XZ.y + 1.6f }, { LADDER_XZ.x + 2.6f, 21.8f, LADDER_XZ.y + 1.6f } };
+    ANCHOR[TH_BENCH] = { { LADDER_XZ.x + 2.0f, CS / 3.0f + 1.8f, LADDER_XZ.y + 1.4f }, { LADDER_XZ.x + 2.0f, CS * 2.0f / 3.0f + 1.8f, LADDER_XZ.y + 1.4f } };
 }
 
 // ===================================================================
@@ -329,6 +339,7 @@ struct Piece {
     glm::ivec3 solPos = glm::ivec3(0);
     bool inSolution = true;         // 생성기의 정답에 쓰인 조각인지 (아니면 선택 사항)
     unsigned char bolts[6] = { 0, 0, 0, 0, 0, 0 };    // 다단블럭 껍데기 면별로 푼 나사 (4비트)
+    int fromStage = -1;             // 다단블럭: 어느 촬영(스테이지)에서 나왔는지
 };
 
 std::vector<glm::ivec3> shapeCells(const Piece& p, const glm::mat3& rot) {
@@ -505,8 +516,8 @@ void partitionInto(std::vector<char>& used, std::vector<Piece>& out) {
 std::string gridLabel(int n) { return std::to_string(n) + "X" + std::to_string(n) + "X" + std::to_string(n); }
 
 void generateStage() {
-    const int sizes[] = { 2, 3, 3, 3, 4 };
-    N = stage < 5 ? sizes[stage] : 4;
+    const int sizes[] = { 2, 3, 4 };
+    N = sizes[std::min(stage, 2)];
     // 넘버패드 기준: 아래층 7번(먼 쪽 왼쪽) 시작, 위층 2번(가까운 쪽 가운데) 끝
     startCell = glm::ivec3(0, 0, 0);
     endCell = glm::ivec3(N == 2 ? 1 : N / 2, N - 1, N - 1);
@@ -613,7 +624,10 @@ void saveCustomBlock() {
         for (size_t k = 0; k < sc.size(); ++k)
             if (p.pos + sc[k] == g) c.cells.push_back({ g, p.cells[k].theme, p.rot * p.cells[k].orient, p.cells[k].seed });
     }
+    c.fromStage = stage;
+    library.erase(std::remove_if(library.begin(), library.end(), [](const Piece& q) { return q.fromStage == stage; }), library.end());
     library.push_back(c);
+    std::sort(library.begin(), library.end(), [](const Piece& a, const Piece& b) { return a.fromStage < b.fromStage; });
 }
 
 // ===================================================================
@@ -699,27 +713,32 @@ struct CellBuilder {
     }
 };
 
-// ---------------- 컨셉별 맵 (블럭 30 x 30 x 30, 발판/기믹 크기는 그대로) ----------------
+// ---------------- 컨셉별 맵 (블럭 21 x 21 x 21, 발판/기믹 크기는 그대로) ----------------
+// 위치 값은 30 기준으로 적고 P() 로 블럭 크기에 맞춘다 (크기 값은 그대로)
+inline float P(float v) { return v * CS / 30.0f; }
+
 // 경로 발판: 떠 있는 발판 + 바닥까지 내려가는 지지대
 void routePlat(CellBuilder& b, const RStep& r, float size, const Material& top, const Material& pole, float thick = 0.5f) {
     b.plat(r.x, r.z, size, size, r.h, top, thick);
     b.deco(D_STATIC, at(CellBuilder::L(r.x, (SLAB + r.h - thick) * 0.5f, r.z)), glm::vec3(0.22f, r.h - thick - SLAB, 0.22f), 1, pole);
 }
 
-// 바닥 장애물: 상자 더미 / 드럼통 / 눕힌 파이프 (맵이 커진 만큼 바닥이 비지 않게)
+// 바닥 장애물: 상자 더미 / 드럼통 / 눕힌 파이프
 // 가운데 승강기 자리, 구멍 타일, 경로 첫 발판 근처는 피한다
 void addClutter(CellBuilder& b, int theme, std::mt19937& r, int count) {
     auto rnd = [&](float a, float c) { std::uniform_real_distribution<float> d(a, c); return d(r); };
     const Theme& t = THEMES[theme];
     Material crate = mat(glm::vec3(0.62f, 0.45f, 0.28f), 0.1f, 8.0f, 0.0f, 2), drum = mat(t.color * 0.75f, 0.6f, 32.0f), pipe = mat(glm::vec3(0.5f, 0.42f, 0.32f), 0.8f, 48.0f);
+    float lim = HALF - 2.2f;
     int placed = 0;
     for (int tries = 0; tries < count * 10 && placed < count; ++tries) {
-        float x = rnd(-12.5f, 12.5f), z = rnd(-12.5f, 12.5f);
-        if (fabsf(x) < 4.0f && fabsf(z) < 4.0f) continue;
+        float x = rnd(-lim, lim), z = rnd(-lim, lim);
+        if (fabsf(x) < 3.5f && fabsf(z) < 3.5f) continue;
         if (t.fl[tileOf(z)][tileOf(x)] != 'X') continue;
-        if (!ROUTE[theme].empty() && glm::length(glm::vec2(x - ROUTE[theme][0].x, z - ROUTE[theme][0].z)) < 4.0f) continue;
+        if (!ROUTE[theme].empty() && glm::length(glm::vec2(x - ROUTE[theme][0].x, z - ROUTE[theme][0].z)) < 3.5f) continue;
         if (theme == TH_BENCH && glm::length(glm::vec2(x - LADDER_XZ.x, z - LADDER_XZ.y)) < 3.0f) continue;
-        if (theme == TH_END && glm::length(glm::vec2(x + 10.0f, z + 10.0f)) < 4.0f) continue;
+        if (theme == TH_END && glm::length(glm::vec2(x - P(-10.0f), z - P(-10.0f))) < 3.5f) continue;
+        if (theme == TH_FEEDING && glm::length(glm::vec2(x - PAD0_XZ.x, z - PAD0_XZ.y)) < 3.0f) continue;
         int kind = (int)rnd(0.0f, 2.999f);
         if (kind == 0) {
             float s = rnd(1.2f, 2.0f);
@@ -732,7 +751,7 @@ void addClutter(CellBuilder& b, int theme, std::mt19937& r, int count) {
                 b.deco(D_STATIC, at(CellBuilder::L(x + dx, SLAB + hh * 0.5f, z)), glm::vec3(0.8f, hh, 0.8f), 1, drum);
             }
         } else {
-            float len = rnd(3.0f, 6.0f);
+            float len = rnd(2.5f, 4.5f);
             bool alongX = rnd(0.0f, 1.0f) < 0.5f;
             b.box(CellBuilder::L(x, SLAB + 0.4f, z), alongX ? glm::vec3(len, 0.8f, 0.8f) : glm::vec3(0.8f, 0.8f, len), pipe, true, glm::vec3(0.0f), false);
             b.deco(D_STATIC, at(CellBuilder::L(x, SLAB + 0.4f, z)) * (alongX ? rotZ(PI * 0.5f) : rotX(PI * 0.5f)), glm::vec3(0.8f, len, 0.8f), 1, pipe);
@@ -749,24 +768,23 @@ void buildGear(CellBuilder& b, const Theme& t) {
         b.deco(D_GEAR, at(CellBuilder::L(R[i].x, R[i].h - 0.25f, R[i].z)), glm::vec3(1.45f, 0.5f, 0), 1, brass, i % 2 ? 0.6f : -0.6f, 0, 0, 10);
         b.deco(D_STATIC, at(CellBuilder::L(R[i].x, (SLAB + R[i].h - 0.5f) * 0.5f, R[i].z)), glm::vec3(0.3f, R[i].h - 0.5f - SLAB, 0.3f), 1, iron);
     }
-    // 벽면 장식 톱니들 (맞물려 돈다)
-    float wg[5][4] = { { -5.0f, 8.0f, 3.0f, 0.3f }, { -9.6f, 4.0f, 1.6f, -0.56f }, { 3.0f, 15.0f, 2.4f, -0.37f }, { 7.0f, 22.0f, 1.6f, 0.56f }, { -2.0f, 24.0f, 3.0f, 0.3f } };
-    for (auto& g : wg) b.deco(D_GEAR, at(CellBuilder::L(-14.4f, g[1], g[0])) * rotZ(PI * 0.5f), glm::vec3(g[2], 0.4f, 0), 1, brass, g[3], 0, 0, (int)(g[2] * 5.0f));
+    float wg[4][4] = { { -5.0f, 8.0f, 3.0f, 0.3f }, { -9.6f, 4.0f, 1.6f, -0.56f }, { 3.0f, 15.0f, 2.4f, -0.37f }, { 7.0f, 22.0f, 1.6f, 0.56f } };
+    for (auto& g : wg) b.deco(D_GEAR, at(CellBuilder::L(-HALF + 0.6f, P(g[1]), P(g[0]))) * rotZ(PI * 0.5f), glm::vec3(g[2], 0.4f, 0), 1, brass, g[3], 0, 0, (int)(g[2] * 5.0f));
 }
 
 void buildConveyor(CellBuilder& b, const Theme& t) {
     Material belt = mat(glm::vec3(0.12f, 0.12f, 0.13f), 0.3f, 24.0f), frame = mat(t.color, 0.4f, 24.0f), crate = mat(glm::vec3(0.62f, 0.45f, 0.28f), 0.1f, 8.0f, 0.0f, 2);
     for (const auto& r : ROUTE[TH_CONVEYOR]) routePlat(b, r, 2.4f, crate, frame, 0.8f);
-    // 바닥 벨트 두 줄 (위에 서면 실려 간다)
-    b.box(CellBuilder::L(0, SLAB + 0.25f, 0), glm::vec3(26.0f, 0.5f, 2.2f), belt, true, glm::vec3(2.4f, 0, 0));
-    b.box(CellBuilder::L(-6.0f, SLAB + 0.25f, 7.5f), glm::vec3(2.2f, 0.5f, 10.0f), belt, true, glm::vec3(0, 0, -2.4f));
-    for (int s = -1; s <= 1; s += 2) b.box(CellBuilder::L(0, SLAB + 0.2f, 1.18f * s), glm::vec3(26.0f, 0.4f, 0.16f), frame, false);
-    for (int i = 0; i < 10; ++i) b.deco(D_SLIDE, at(CellBuilder::L(0, SLAB + 0.85f, 0)), glm::vec3(0.7f, 0.6f, 0.7f), 0, crate, 2.4f, 12.5f, i * 2.5f);
-    for (int i = 0; i < 4; ++i) b.deco(D_SLIDE, at(CellBuilder::L(-6.0f, SLAB + 0.85f, 7.5f)) * glm::rotate(glm::mat4(1.0f), PI * 0.5f, glm::vec3(0, 1, 0)), glm::vec3(0.7f, 0.6f, 0.7f), 0, crate, 2.4f, 4.8f, i * 2.4f);
+    float L1 = CS - 4.0f, L2 = P(10.0f);
+    b.box(CellBuilder::L(0, SLAB + 0.25f, 0), glm::vec3(L1, 0.5f, 2.2f), belt, true, glm::vec3(2.4f, 0, 0));
+    b.box(CellBuilder::L(P(-6.0f), SLAB + 0.25f, P(7.5f)), glm::vec3(2.2f, 0.5f, L2), belt, true, glm::vec3(0, 0, -2.4f));
+    for (int s = -1; s <= 1; s += 2) b.box(CellBuilder::L(0, SLAB + 0.2f, 1.18f * s), glm::vec3(L1, 0.4f, 0.16f), frame, false);
+    for (int i = 0; i < 7; ++i) b.deco(D_SLIDE, at(CellBuilder::L(0, SLAB + 0.85f, 0)), glm::vec3(0.7f, 0.6f, 0.7f), 0, crate, 2.4f, L1 * 0.48f, i * 2.5f);
+    for (int i = 0; i < 3; ++i) b.deco(D_SLIDE, at(CellBuilder::L(P(-6.0f), SLAB + 0.85f, P(7.5f))) * glm::rotate(glm::mat4(1.0f), PI * 0.5f, glm::vec3(0, 1, 0)), glm::vec3(0.7f, 0.6f, 0.7f), 0, crate, 2.4f, L2 * 0.48f, i * 2.4f);
     for (int i = 0; i < 2; ++i) {
-        float x = i ? 12.0f : -12.0f;
-        b.pillar(x, -12.0f, 0.25f, 0.25f, 3.2f, frame, false);
-        b.deco(D_SPIN, at(CellBuilder::L(x, 3.4f, -12.0f)), glm::vec3(0.5f, 0.35f, 0.5f), 1, mat(t.accent, 0, 1, 3.0f), 3.0f);
+        float x = i ? P(12.0f) : P(-12.0f);
+        b.pillar(x, P(-12.0f), 0.25f, 0.25f, 3.2f, frame, false);
+        b.deco(D_SPIN, at(CellBuilder::L(x, 3.4f, P(-12.0f))), glm::vec3(0.5f, 0.35f, 0.5f), 1, mat(t.accent, 0, 1, 3.0f), 3.0f);
     }
 }
 
@@ -783,9 +801,8 @@ void buildPress(CellBuilder& b, const Theme& t) {
             b.deco(D_PISTON, at(CellBuilder::L(x, h + 2.9f, z)), glm::vec3(1.9f, 0.5f, 1.9f), 0, dark, 0.4f, 2.2f, i * 0.3f);
         }
     }
-    // 바닥의 낮은 프레스 (판금 더미 위로 내려찍는 장식)
     for (int i = 0; i < 2; ++i) {
-        float x = i ? -10.0f : 0.0f, z = i ? 10.0f : 11.0f;
+        float x = i ? P(-10.0f) : 0.0f, z = i ? P(10.0f) : P(11.0f);
         b.pillar(x, z, 2.4f, 2.4f, 1.0f, dark);
         b.deco(D_PISTON, at(CellBuilder::L(x, 3.6f, z)), glm::vec3(1.8f, 0.5f, 1.8f), 0, body, 0.5f, 2.3f, i * 0.5f);
     }
@@ -800,21 +817,19 @@ void buildBoiler(CellBuilder& b, const Theme& t) {
         b.box(CellBuilder::L(0, 0.15f, 2.1f * s), glm::vec3(4.4f, 0.1f, 0.2f), ring, false);
         b.box(CellBuilder::L(2.1f * s, 0.15f, 0), glm::vec3(0.2f, 0.1f, 4.0f), ring, false);
     }
-    // 승강기 둘레 쉼터 발판 (높이 10, 20)
-    for (float h : { 10.4f, 20.4f })
+    for (float h : { CS / 3.0f + 0.4f, CS * 2.0f / 3.0f + 0.4f })
         for (int k = 0; k < 4; ++k) {
-            glm::vec2 d = k == 0 ? glm::vec2(5, 0) : k == 1 ? glm::vec2(-5, 0) : k == 2 ? glm::vec2(0, 5) : glm::vec2(0, -5);
+            glm::vec2 d = k == 0 ? glm::vec2(3.6f, 0) : k == 1 ? glm::vec2(-3.6f, 0) : k == 2 ? glm::vec2(0, 3.6f) : glm::vec2(0, -3.6f);
             b.plat(d.x, d.y, 3.0f, 3.0f, h, pipe, 0.4f);
         }
-    // 네 귀퉁이 보일러
     for (int k = 0; k < 4; ++k) {
-        float x = k & 1 ? 10.0f : -10.0f, z = k & 2 ? 10.0f : -10.0f;
+        float x = k & 1 ? P(10.0f) : P(-10.0f), z = k & 2 ? P(10.0f) : P(-10.0f);
         b.box(CellBuilder::L(x, 2.9f, z), glm::vec3(2.8f, 5.0f, 2.8f), shell, true, glm::vec3(0.0f), false);
         b.deco(D_STATIC, at(CellBuilder::L(x, 2.9f, z)), glm::vec3(3.3f, 5.0f, 3.3f), 1, shell);
         b.deco(D_STATIC, at(CellBuilder::L(x, 5.6f, z)), glm::vec3(2.4f, 0.4f, 2.4f), 1, pipe);
         b.box(CellBuilder::L(x, 1.2f, z + (z < 0 ? 1.68f : -1.68f)), glm::vec3(1.0f, 0.8f, 0.1f), fire, false);
-        b.deco(D_STATIC, at(CellBuilder::L(x, 15.0f, z)), glm::vec3(0.5f, 19.0f, 0.5f), 1, pipe);
-        vents.push_back({ b.C + b.R * CellBuilder::L(x, 24.6f, z), b.R * glm::vec3(0, 1, 0), 0.0f, curChunk });
+        b.deco(D_STATIC, at(CellBuilder::L(x, (5.8f + CS - 3.0f) * 0.5f, z)), glm::vec3(0.5f, CS - 8.8f, 0.5f), 1, pipe);
+        vents.push_back({ b.C + b.R * CellBuilder::L(x, CS - 3.0f, z), b.R * glm::vec3(0, 1, 0), 0.0f, curChunk });
     }
 }
 
@@ -822,9 +837,8 @@ void buildBench(CellBuilder& b, const Theme& t) {
     Material wood = mat(glm::vec3(0.55f, 0.38f, 0.22f), 0.15f, 12.0f, 0.0f, 2), metal = mat(glm::vec3(0.62f, 0.63f, 0.66f), 1.0f, 64.0f);
     Material lamp = mat(glm::vec3(1.0f, 0.88f, 0.6f), 0.0f, 1.0f, 3.5f), shade = mat(t.color, 0.4f, 24.0f);
     b.ladder(LADDER_XZ.x, LADDER_XZ.y, SLAB, CS + 1.4f);
-    for (float h : { 10.4f, 20.4f }) b.plat(LADDER_XZ.x + 2.6f, LADDER_XZ.y + 1.6f, 2.4f, 2.4f, h, wood, 0.4f);
-    // 작업대 줄 + 끝없이 조여지는 볼트
-    float benches[3][4] = { { 0.0f, -10.0f, 6.0f, 1.6f }, { -10.0f, 4.0f, 1.6f, 8.0f }, { 5.0f, 8.0f, 6.0f, 1.6f } };
+    for (float h : { CS / 3.0f + 0.4f, CS * 2.0f / 3.0f + 0.4f }) b.plat(LADDER_XZ.x + 2.0f, LADDER_XZ.y + 1.4f, 2.4f, 2.4f, h, wood, 0.4f);
+    float benches[3][4] = { { 0.0f, P(-10.0f), 5.0f, 1.6f }, { P(-10.0f), P(4.0f), 1.6f, 6.0f }, { P(5.0f), P(8.0f), 5.0f, 1.6f } };
     for (int k = 0; k < 3; ++k) {
         auto& bn = benches[k];
         b.pillar(bn[0], bn[1], bn[2], bn[3], 1.4f, wood);
@@ -834,16 +848,15 @@ void buildBench(CellBuilder& b, const Theme& t) {
             b.deco(D_SPIN, at(CellBuilder::L(bn[0] + (alongX ? o : 0.0f), 1.52f, bn[1] + (alongX ? 0.0f : o))), glm::vec3(0.28f, 0.22f, 0.28f), 0, metal, 6.0f + i, 0, (float)i);
         }
     }
-    // 선반 (2단 점프로 오르는 곳)
-    b.plat(-10.0f, -10.0f, 2.8f, 2.8f, 4.4f, wood, 0.4f);
+    b.plat(P(-10.0f), P(-10.0f), 2.8f, 2.8f, 4.4f, wood, 0.4f);
     for (int sx = -1; sx <= 1; sx += 2)
-        for (int sz = -1; sz <= 1; sz += 2) b.deco(D_STATIC, at(CellBuilder::L(-10.0f + 1.2f * sx, 2.2f, -10.0f + 1.2f * sz)), glm::vec3(0.15f, 3.6f, 0.15f), 0, wood);
-    b.deco(D_HAND, at(CellBuilder::L(-14.5f, 9.0f, 6.0f)) * rotZ(-PI * 0.5f), glm::vec3(2.4f, 0.15f, 0.45f), 0, metal, 0.6f, 0.35f, 1.0f);
-    for (int i = 0; i < 4; ++i) {
-        float x = -6.0f + i * 4.0f;
-        b.deco(D_STATIC, at(CellBuilder::L(x, 12.0f, 4.0f)), glm::vec3(0.05f, 6.0f, 0.05f), 0, metal);
-        b.deco(D_STATIC, at(CellBuilder::L(x, 8.9f, 4.0f)), glm::vec3(0.9f, 0.4f, 0.9f), 1, shade);
-        b.deco(D_STATIC, at(CellBuilder::L(x, 8.65f, 4.0f)), glm::vec3(0.5f, 0.12f, 0.5f), 1, lamp);
+        for (int sz = -1; sz <= 1; sz += 2) b.deco(D_STATIC, at(CellBuilder::L(P(-10.0f) + 1.2f * sx, 2.2f, P(-10.0f) + 1.2f * sz)), glm::vec3(0.15f, 3.6f, 0.15f), 0, wood);
+    b.deco(D_HAND, at(CellBuilder::L(-HALF + 0.5f, P(9.0f), P(6.0f))) * rotZ(-PI * 0.5f), glm::vec3(2.4f, 0.15f, 0.45f), 0, metal, 0.6f, 0.35f, 1.0f);
+    for (int i = 0; i < 3; ++i) {
+        float x = P(-6.0f) + i * P(5.0f);
+        b.deco(D_STATIC, at(CellBuilder::L(x, P(12.0f), P(4.0f))), glm::vec3(0.05f, P(6.0f), 0.05f), 0, metal);
+        b.deco(D_STATIC, at(CellBuilder::L(x, P(9.0f) - 0.1f, P(4.0f))), glm::vec3(0.9f, 0.4f, 0.9f), 1, shade);
+        b.deco(D_STATIC, at(CellBuilder::L(x, P(9.0f) - 0.35f, P(4.0f))), glm::vec3(0.5f, 0.12f, 0.5f), 1, lamp);
     }
 }
 
@@ -851,17 +864,16 @@ void buildSupervisor(CellBuilder& b, const Theme& t) {
     Material frame = mat(glm::vec3(0.12f, 0.12f, 0.14f), 0.4f, 32.0f), screen = mat(t.accent, 0.0f, 1.0f, 1.6f), ink = mat(glm::vec3(0.05f));
     Material desk = mat(glm::vec3(0.4f, 0.24f, 0.14f), 0.3f, 24.0f, 0.0f, 2), cab = mat(t.color, 0.5f, 32.0f);
     for (const auto& r : ROUTE[TH_SUPERVISOR]) routePlat(b, r, 2.2f, cab, frame, 0.6f);
-    // 벽 한 면의 감시 화면 세 개 + 감독관 얼굴
+    float wx = -HALF + 0.25f;
     for (int k = -1; k <= 1; ++k) {
-        float z = k * 8.0f, y = 14.0f + (k == 0 ? 4.0f : 0.0f);
-        b.box(CellBuilder::L(-14.75f, y, z), glm::vec3(0.3f, 4.4f, 6.0f), frame, false);
-        b.box(CellBuilder::L(-14.58f, y, z), glm::vec3(0.06f, 3.8f, 5.4f), screen, false);
-        b.box(CellBuilder::L(-14.53f, y + 0.6f, z - 1.0f), glm::vec3(0.04f, 0.35f, 0.6f), ink, false);
-        b.box(CellBuilder::L(-14.53f, y + 0.6f, z + 1.0f), glm::vec3(0.04f, 0.35f, 0.6f), ink, false);
-        b.box(CellBuilder::L(-14.53f, y - 0.9f, z), glm::vec3(0.04f, 0.25f, 1.8f), ink, false);
+        float z = k * P(8.0f), y = P(14.0f) + (k == 0 ? P(4.0f) : 0.0f);
+        b.box(CellBuilder::L(wx, y, z), glm::vec3(0.3f, 4.4f, 5.0f), frame, false);
+        b.box(CellBuilder::L(wx + 0.17f, y, z), glm::vec3(0.06f, 3.8f, 4.4f), screen, false);
+        b.box(CellBuilder::L(wx + 0.22f, y + 0.6f, z - 1.0f), glm::vec3(0.04f, 0.35f, 0.6f), ink, false);
+        b.box(CellBuilder::L(wx + 0.22f, y + 0.6f, z + 1.0f), glm::vec3(0.04f, 0.35f, 0.6f), ink, false);
+        b.box(CellBuilder::L(wx + 0.22f, y - 0.9f, z), glm::vec3(0.04f, 0.25f, 1.8f), ink, false);
     }
-    // 책상 줄
-    for (int i = 0; i < 3; ++i) b.pillar(-6.0f + i * 6.0f, 6.0f, 2.6f, 1.5f, 1.3f, desk);
+    for (int i = 0; i < 3; ++i) b.pillar(P(-6.0f) + i * P(6.0f), P(6.0f), 2.6f, 1.5f, 1.3f, desk);
 }
 
 void buildFeeding(CellBuilder& b, const Theme& t) {
@@ -874,14 +886,13 @@ void buildFeeding(CellBuilder& b, const Theme& t) {
         routePlat(b, R[i], 3.0f, steel, steel);
         if (i + 1 < R.size()) b.pad(R[i].x + 0.6f, R[i].z + 0.6f, 1.4f, R[i].h + 0.3f, PAD_V);
     }
-    // 급식 기계 + 식탁
-    b.pillar(-11.0f, 11.0f, 2.2f, 2.2f, 3.4f, steel);
-    b.box(CellBuilder::L(-9.6f, 3.0f, 11.0f), glm::vec3(1.0f, 0.3f, 0.3f), steel, false);
-    b.deco(D_SPIN, at(CellBuilder::L(-8.8f, 3.0f, 11.0f)) * rotZ(PI * 0.5f), glm::vec3(0.35f, 1.2f, 0.35f), 1, corn, 9.0f);
+    b.pillar(P(-11.0f), P(11.0f), 2.2f, 2.2f, 3.4f, steel);
+    b.box(CellBuilder::L(P(-11.0f) + 1.4f, 3.0f, P(11.0f)), glm::vec3(1.0f, 0.3f, 0.3f), steel, false);
+    b.deco(D_SPIN, at(CellBuilder::L(P(-11.0f) + 2.2f, 3.0f, P(11.0f))) * rotZ(PI * 0.5f), glm::vec3(0.35f, 1.2f, 0.35f), 1, corn, 9.0f);
     for (int i = 0; i < 2; ++i) {
-        float z = -2.0f + i * 5.0f;
-        b.pillar(-11.0f, z, 2.4f, 4.0f, 1.2f, table);
-        b.deco(D_SPIN, at(CellBuilder::L(-11.0f, 1.25f, z)), glm::vec3(1.2f, 0.08f, 1.2f), 1, plate, 1.4f);
+        float z = P(-2.0f + i * 5.0f);
+        b.pillar(P(-11.0f), z, 2.4f, 3.0f, 1.2f, table);
+        b.deco(D_SPIN, at(CellBuilder::L(P(-11.0f), 1.25f, z)), glm::vec3(1.2f, 0.08f, 1.2f), 1, plate, 1.4f);
     }
 }
 
@@ -889,9 +900,8 @@ void buildClock(CellBuilder& b, const Theme& t) {
     Material face = mat(glm::vec3(0.93f, 0.9f, 0.8f), 0.2f, 16.0f, 0.25f), ink = mat(glm::vec3(0.06f), 0.3f, 16.0f), rim = mat(t.color, 0.8f, 48.0f);
     Material locker = mat(t.color * 0.8f, 0.5f, 32.0f);
     for (const auto& r : ROUTE[TH_CLOCK]) b.pillar(r.x, r.z, 1.9f, 1.9f, r.h, locker);
-    // -Z 벽의 큰 시계 두 개 (문자판이 +Z 를 본다)
     for (int k = 0; k < 2; ++k) {
-        glm::mat4 wall = at(CellBuilder::L(k ? 6.0f : -5.0f, k ? 20.0f : 9.0f, -14.75f)) * rotX(PI * 0.5f);
+        glm::mat4 wall = at(CellBuilder::L(k ? P(6.0f) : P(-5.0f), k ? P(20.0f) : P(9.0f), -HALF + 0.25f)) * rotX(PI * 0.5f);
         b.deco(D_STATIC, wall, glm::vec3(5.2f, 0.3f, 5.2f), 1, rim);
         b.deco(D_STATIC, wall * at(0, 0.1f, 0), glm::vec3(4.6f, 0.2f, 4.6f), 1, face);
         for (int i = 0; i < 12; ++i)
@@ -899,23 +909,21 @@ void buildClock(CellBuilder& b, const Theme& t) {
         b.deco(D_HAND, wall * at(0, 0.26f, 0), glm::vec3(1.9f, 0.05f, 0.14f), 0, ink, 1.2f + k, 0, 0);
         b.deco(D_HAND, wall * at(0, 0.3f, 0), glm::vec3(1.3f, 0.05f, 0.22f), 0, ink, 0.1f, 0, 1.0f);
     }
-    // 출퇴근 카드 기계 줄
-    for (int i = 0; i < 3; ++i) b.pillar(-10.0f + i * 2.0f, 10.0f, 1.2f, 0.8f, 1.9f, rim);
+    for (int i = 0; i < 3; ++i) b.pillar(P(-10.0f) + i * 2.0f, P(10.0f), 1.2f, 0.8f, 1.9f, rim);
 }
 
 void buildStart(CellBuilder& b, const Theme& t) {
     Material green = mat(t.color, 0.4f, 24.0f), lamp = mat(t.accent, 0, 1, 2.5f), iron = mat(glm::vec3(0.2f), 0.5f, 32.0f);
     for (const auto& r : ROUTE[TH_START]) routePlat(b, r, 2.2f, green, iron, 0.6f);
-    // 출근 게이트 아치
-    b.pillar(-9.0f, -2.0f, 0.4f, 0.4f, 4.6f, iron, false);
-    b.pillar(-3.0f, -2.0f, 0.4f, 0.4f, 4.6f, iron, false);
-    b.box(CellBuilder::L(-6.0f, 4.7f, -2.0f), glm::vec3(6.4f, 0.4f, 0.4f), green, false);
-    b.deco(D_SPIN, at(CellBuilder::L(-6.0f, 5.2f, -2.0f)), glm::vec3(0.5f, 0.4f, 0.5f), 1, lamp, 2.0f);
+    b.pillar(P(-9.0f), P(-2.0f), 0.4f, 0.4f, 4.6f, iron, false);
+    b.pillar(P(-3.0f), P(-2.0f), 0.4f, 0.4f, 4.6f, iron, false);
+    b.box(CellBuilder::L(P(-6.0f), 4.7f, P(-2.0f)), glm::vec3(P(6.0f) + 0.4f, 0.4f, 0.4f), green, false);
+    b.deco(D_SPIN, at(CellBuilder::L(P(-6.0f), 5.2f, P(-2.0f))), glm::vec3(0.5f, 0.4f, 0.5f), 1, lamp, 2.0f);
 }
 
 void buildEnd(CellBuilder& b, const Theme& t, bool isGoal) {
     Material brass = mat(t.accent, 1.0f, 64.0f, 0.2f), iron = mat(glm::vec3(0.2f), 0.5f, 32.0f), glow = mat(glm::vec3(1.0f, 0.9f, 0.5f), 0, 1, 3.0f);
-    float x = -10.0f, z = -10.0f;
+    float x = P(-10.0f), z = P(-10.0f);
     b.pillar(x, z, 1.8f, 1.8f, 1.2f, iron);
     b.deco(D_STATIC, at(CellBuilder::L(x, 4.0f, z)), glm::vec3(0.5f, 5.6f, 0.5f), 1, brass);
     b.deco(D_STATIC, at(CellBuilder::L(x, 7.2f, z)), glm::vec3(1.0f, 1.0f, 1.0f), 1, brass);
@@ -935,7 +943,6 @@ void buildCell(int theme, const glm::mat3& R, glm::vec3 C, bool isGoal, unsigned
             if (t.fl[tz][tx] != 'X') continue;
             float x = -TILE + TILE * tx, z = -TILE + TILE * tz;
             b.box(CellBuilder::L(x, SLAB * 0.5f, z), glm::vec3(TILE, SLAB, TILE), floorM);
-            // 블럭 경계 쪽 가장자리에 컨셉 색 띠 (벽은 없지만 어느 블럭인지 보이게)
             if (tx == 0) b.box(CellBuilder::L(-e, SLAB + 0.03f, z), glm::vec3(0.3f, 0.06f, TILE), trim, false);
             if (tx == 2) b.box(CellBuilder::L(e, SLAB + 0.03f, z), glm::vec3(0.3f, 0.06f, TILE), trim, false);
             if (tz == 0) b.box(CellBuilder::L(x, SLAB + 0.03f, -e), glm::vec3(TILE, 0.06f, 0.3f), trim, false);
@@ -954,7 +961,7 @@ void buildCell(int theme, const glm::mat3& R, glm::vec3 C, bool isGoal, unsigned
     case TH_END: buildEnd(b, t, isGoal); break;
     }
     std::mt19937 r(seed * 2654435761u + (unsigned)theme);
-    addClutter(b, theme, r, theme >= TH_START ? 3 : 6);
+    addClutter(b, theme, r, theme >= TH_START ? 2 : 4);
 }
 
 // 다단블럭 껍데기: 씬 안쪽을 향하는 면은 나사 4개로 잠긴 패널
@@ -1021,6 +1028,34 @@ void buildWorld() {
     addBox({ 0, H * 0.5f, -W * 0.5f - 0.5f }, { W + 2.0f, H, 1.0f }, brick);
     addBox({ W * 0.5f + 0.5f, H * 0.5f, 0 }, { 1.0f, H, W }, brick);
     addBox({ -W * 0.5f - 0.5f, H * 0.5f, 0 }, { 1.0f, H, W }, brick);
+    {
+        Material wood = mat(glm::vec3(0.45f, 0.33f, 0.2f), 0.1f, 8.0f, 0.0f, 2), iron = mat(glm::vec3(0.15f), 0.6f, 32.0f), lampM = mat(glm::vec3(1.0f, 0.95f, 0.8f), 0, 1, 4.0f);
+        auto beam = [&](glm::vec3 a, glm::vec3 b, float t, const Material& m) { decos.push_back({ beamMat(a, b), D_STATIC, 0, 0, glm::vec3(t, glm::length(b - a), t), m, 0, 0, 0, -1 }); };
+        for (int side = 0; side < 4; ++side) {
+            glm::vec3 n = side == 0 ? glm::vec3(1, 0, 0) : side == 1 ? glm::vec3(-1, 0, 0) : side == 2 ? glm::vec3(0, 0, 1) : glm::vec3(0, 0, -1);
+            glm::vec3 tg(n.z, 0, -n.x);
+            for (float s = -W * 0.5f + CS * 0.5f; s < W * 0.5f; s += CS * 0.5f)
+                beam(n * (W * 0.5f + 1.0f + H * 0.4f) + tg * s, n * (W * 0.5f + 1.0f) + tg * s + glm::vec3(0, H * 0.7f, 0), 0.35f, wood);
+        }
+        for (int k = 0; k < 4; ++k) {
+            float sx = k & 1 ? 1.0f : -1.0f, sz = k & 2 ? 1.0f : -1.0f;
+            glm::vec3 base(sx * (W * 0.5f + 10.0f), 0, sz * (W * 0.5f + 10.0f)), top = base + glm::vec3(0, H + 6.0f, 0);
+            beam(base, top, 0.4f, iron);
+            for (int l = 0; l < 3; ++l) { float a = l * 2.094f; beam(base + glm::vec3(cosf(a) * 2.0f, 0, sinf(a) * 2.0f), base + glm::vec3(0, 3.0f, 0), 0.15f, iron); }
+            glm::vec3 toC = glm::normalize(glm::vec3(0, N * CS * 0.4f, 0) - top);
+            decos.push_back({ beamMat(top, top + toC * 1.6f), D_STATIC, 0, 0, glm::vec3(1.6f, 1.6f, 1.6f), iron, 0, 0, 0, -1 });
+            decos.push_back({ beamMat(top + toC * 0.9f, top + toC * 1.0f), D_STATIC, 0, 0, glm::vec3(1.3f, 0.1f, 1.3f), lampM, 0, 0, 0, -1 });
+        }
+        for (int k = -1; k <= 1; k += 2) {
+            glm::vec3 base(k * W * 0.25f, 0, -W * 0.5f - 9.0f), head = base + glm::vec3(0, 3.2f, 0);
+            for (int l = 0; l < 3; ++l) { float a = l * 2.094f + 0.5f; beam(base + glm::vec3(cosf(a) * 1.2f, 0, sinf(a) * 1.2f), head, 0.1f, wood); }
+            decos.push_back({ glm::translate(glm::mat4(1.0f), head + glm::vec3(0, 0.6f, 0)), D_STATIC, 0, 0, glm::vec3(1.0f, 1.0f, 1.6f), iron, 0, 0, 0, -1 });
+            decos.push_back({ glm::translate(glm::mat4(1.0f), head + glm::vec3(0, 0.6f, 1.0f)) * rotX(PI * 0.5f), D_STATIC, 1, 0, glm::vec3(0.6f, 0.6f, 0.6f), iron, 0, 0, 0, -1 });
+            for (int r = -1; r <= 1; r += 2) decos.push_back({ glm::translate(glm::mat4(1.0f), head + glm::vec3(0, 1.5f, r * 0.45f)) * rotZ(PI * 0.5f), D_STATIC, 1, 0, glm::vec3(0.8f, 0.15f, 0.8f), iron, 0, 0, 0, -1 });
+        }
+        glm::vec3 cb = glm::vec3(W * 0.5f + 7.0f, 0.0f, -W * 0.5f - 7.0f);
+        (void)cb;
+    }
     int P = (int)pieces.size();
     curChunk = P;
     buildCell(TH_START, glm::mat3(1.0f), cellWorldCenter(startCell), false, 11u);
@@ -1128,6 +1163,7 @@ float globalTime = 0.0f, fps = 0.0f, flashT = 0.0f, deathT = 0.0f, helpT = 12.0f
 int deaths = 0;
 std::string toast;
 bool filmOn = true;
+bool inHome = false;            // 찰리의 방 (1인칭 홈)
 GLFWwindow* gWindow = nullptr;
 
 void showToast(const std::string& s) { toast = s; toastT = 3.0f; }
@@ -1150,7 +1186,7 @@ glm::mat4 chunkXform(int ch) {
 
 void spawnAtStart() {
     glm::vec3 c = cellWorldCenter(startCell);
-    pl.pos = c + glm::vec3(-6.0f, -HALF + SLAB, -6.0f);
+    pl.pos = c + glm::vec3(-4.2f, -HALF + SLAB, -4.2f);
     pl.vel = glm::vec3(0.0f);
     pl.onGround = false;
     camYaw = PI * 0.75f;
@@ -1306,6 +1342,7 @@ void updatePlayer(float dt) {
         }
     }
 
+    if (inHome) return;
     // 어둠(빈 칸)에 들어가면 사망
     mid = pl.pos + glm::vec3(0, PLAYER_H * 0.5f, 0);
     glm::ivec3 mc = worldToCell(mid);
@@ -1486,7 +1523,7 @@ void startTransition() {
     for (auto& e : trEvents) trTotal = std::max(trTotal, e.t0 + e.dur);
     trTotal += 0.25f;
     // 연출이 너무 길면 전체 속도를 올린다
-    float scale = trTotal > 6.0f ? 6.0f / trTotal : 1.0f;
+    float scale = trTotal > 2.0f ? 2.0f / trTotal : 1.0f;
     for (auto& e : trEvents) { e.t0 *= scale; e.dur *= scale; }
     trTotal *= scale;
 
@@ -1693,18 +1730,59 @@ void drawDeco(const Deco& d, const glm::mat4& pre) {
     drawMesh(mesh, m * glm::scale(glm::mat4(1.0f), d.size), d.mat);
 }
 
+// ===================================================================
+// 연출 공용 상태: 카메라 덮어쓰기, 찰리 자세 덮어쓰기, 크레인, 필름통, 포스터
+// ===================================================================
+bool camOv = false;                     // 연출 카메라 사용 중 (홈 1인칭, 인트로, 크레인, 엿보기, THE END)
+glm::vec3 camOvPos(0.0f), camOvFwd(0, 0, -1), camOvFocus(0.0f);
+float fadeAmt = 0.0f;                   // 화면 암전 (0~1)
+struct WorkerPose { bool on = false; glm::vec3 pos = glm::vec3(0.0f); float yaw = 0.0f; bool seated = false; } wOverride;
+bool craneActive = false;
+glm::vec3 craneTip(0.0f);
+const glm::vec3 CAN_DESK(0.8f, 0.98f, -3.25f);
+glm::vec3 canPos = CAN_DESK;
+GLuint posterProg = 0, posterVao = 0, posterVbo = 0;
+GLuint posterTex[3] = { 0, 0, 0 };
+
+glm::vec3 craneBasePos() { float W = N * CS; return glm::vec3(W * 0.5f + 7.0f, 0.0f, -W * 0.5f - 7.0f); }
+glm::vec3 craneRestTip() { float W = N * CS, H = N * CS + 2.0f; return glm::vec3(W * 0.2f, H + 7.0f, -W * 0.2f); }
+
+void drawBeam(glm::vec3 a, glm::vec3 b, float t, const Material& m) {
+    float len = glm::length(b - a);
+    if (len < 0.01f) return;
+    drawMesh(cubeMesh, beamMat(a, b) * glm::scale(glm::mat4(1.0f), glm::vec3(t, len, t)), m);
+}
+
+// 촬영 크레인: 세트 밖 기둥 → 팔 → 끝에 매달린 감독 의자
+void drawCrane() {
+    Material iron = mat(glm::vec3(0.18f, 0.18f, 0.2f), 0.6f, 32.0f), red = mat(glm::vec3(0.7f, 0.15f, 0.12f), 0.4f, 24.0f), canvas = mat(glm::vec3(0.75f, 0.68f, 0.5f), 0.1f, 8.0f);
+    glm::vec3 base = craneBasePos(), top = base + glm::vec3(0, N * CS + 12.0f, 0);
+    glm::vec3 tip = craneActive ? craneTip : craneRestTip();
+    drawMesh(cubeMesh, TRS(base + glm::vec3(0, 0.6f, 0), glm::vec3(4.0f, 1.2f, 4.0f)), iron);
+    drawBeam(base, top, 1.0f, red);
+    drawBeam(top, tip, 0.7f, red);
+    drawBeam(top, top - glm::normalize(tip - top) * 6.0f, 0.9f, iron);      // 균형추 쪽
+    drawMesh(cubeMesh, TRS(top - glm::normalize(tip - top) * 6.0f, glm::vec3(2.2f)), iron);
+    glm::vec3 seat = tip - glm::vec3(0, 2.2f, 0);
+    drawBeam(tip, seat + glm::vec3(0, 0.6f, 0), 0.06f, iron);
+    drawMesh(cubeMesh, TRS(seat, glm::vec3(0.9f, 0.1f, 0.9f)), canvas);
+    drawMesh(cubeMesh, TRS(seat + glm::vec3(0, 0.45f, -0.42f), glm::vec3(0.9f, 0.8f, 0.06f)), canvas);
+    for (int s = -1; s <= 1; s += 2) drawMesh(cubeMesh, TRS(seat + glm::vec3(0.45f * s, 0.25f, 0), glm::vec3(0.06f, 0.5f, 0.9f)), iron);
+}
+
 void drawWorker() {
-    glm::mat4 root = glm::translate(glm::mat4(1.0f), pl.pos + glm::vec3(0, -pl.landDip * 0.5f, 0));
-    root = glm::rotate(root, pl.bodyYaw, glm::vec3(0, 1, 0));
+    bool seated = wOverride.on && wOverride.seated;
+    glm::mat4 root = glm::translate(glm::mat4(1.0f), wOverride.on ? wOverride.pos : pl.pos + glm::vec3(0, -pl.landDip * 0.5f, 0));
+    root = glm::rotate(root, wOverride.on ? wOverride.yaw : pl.bodyYaw, glm::vec3(0, 1, 0));
     // 3단 점프는 공중제비 (몸 가운데를 축으로)
-    if (!pl.onGround && pl.jumpChain == 3) root = glm::translate(root, glm::vec3(0, 0.9f, 0)) * glm::rotate(glm::mat4(1.0f), fmodf(globalTime * 9.0f, 2 * PI), glm::vec3(1, 0, 0)) * glm::translate(glm::mat4(1.0f), glm::vec3(0, -0.9f, 0));
+    if (!wOverride.on && !pl.onGround && pl.jumpChain == 3) root = glm::translate(root, glm::vec3(0, 0.9f, 0)) * glm::rotate(glm::mat4(1.0f), fmodf(globalTime * 9.0f, 2 * PI), glm::vec3(1, 0, 0)) * glm::translate(glm::mat4(1.0f), glm::vec3(0, -0.9f, 0));
     float swing = pl.onGround ? sinf(pl.walkT * 7.0f) * 0.6f : 0.25f;
     Material pants = mat(glm::vec3(0.12f, 0.12f, 0.14f), 0.1f, 8.0f), overall = mat(glm::vec3(0.25f, 0.33f, 0.5f), 0.15f, 12.0f, 0.0f, 2);
     Material shirt = mat(glm::vec3(0.88f, 0.86f, 0.8f), 0.1f, 8.0f), skin = mat(glm::vec3(0.92f, 0.76f, 0.62f), 0.2f, 16.0f);
     Material black = mat(glm::vec3(0.05f), 0.5f, 32.0f), metal = mat(glm::vec3(0.7f, 0.7f, 0.74f), 1.0f, 64.0f), strap = mat(glm::vec3(0.75f, 0.2f, 0.18f), 0.2f, 12.0f);
     for (int i = 0; i < 2; ++i) {
         float s = i == 0 ? -1.0f : 1.0f;
-        glm::mat4 leg = glm::rotate(glm::translate(root, glm::vec3(0.13f * s, 0.82f, 0)), swing * s, glm::vec3(1, 0, 0));
+        glm::mat4 leg = glm::rotate(glm::translate(root, glm::vec3(0.13f * s, 0.82f, 0)), seated ? -1.45f : swing * s, glm::vec3(1, 0, 0));
         drawMesh(cubeMesh, leg * TRS({ 0, -0.4f, 0 }, { 0.2f, 0.82f, 0.22f }), pants);
         drawMesh(cubeMesh, leg * TRS({ 0, -0.8f, 0.07f }, { 0.22f, 0.12f, 0.34f }), black);
     }
@@ -1715,7 +1793,7 @@ void drawWorker() {
     drawMesh(cubeMesh, root * TRS({ 0, 1.74f, 0 }, { 0.3f, 0.32f, 0.3f }), skin);
     drawMesh(cylMesh, root * TRS({ 0, 1.92f, 0 }, { 0.46f, 0.04f, 0.46f }), black);
     drawMesh(cylMesh, root * TRS({ 0, 2.02f, 0 }, { 0.3f, 0.2f, 0.3f }), black);
-    bool up = (pl.inLift || pl.onLadder) && !pl.onGround;
+    bool up = !wOverride.on && (pl.inLift || pl.onLadder) && !pl.onGround;
     for (int i = 0; i < 2; ++i) {
         float s = i == 0 ? -1.0f : 1.0f;
         float a = up ? -2.7f + sinf(globalTime * 8.0f + i * PI) * 0.3f : -swing * s * 0.8f;
@@ -1802,8 +1880,13 @@ void drawWorld(bool withEffects) {
         for (const auto& b : ghostBoxes) if (b.visible) drawMesh(cubeMesh, ghostM[b.chunk] * TRS(b.center, b.size), b.mat);
         for (const auto& d : ghostDecos) drawDeco(d, ghostM[d.chunk]);
     }
-    for (const auto& p : pickups) if (!p.taken) drawPickupModel(p, withEffects);
-    drawWorker();
+    if (!inHome) for (const auto& p : pickups) if (!p.taken) drawPickupModel(p, withEffects);
+    if (!inHome || wOverride.on) drawWorker();
+    if (!inHome) drawCrane();
+    else {
+        drawMesh(cylMesh, TRS(canPos, glm::vec3(0.5f, 0.12f, 0.5f)), mat(glm::vec3(0.7f, 0.72f, 0.75f), 1.0f, 64.0f));
+        drawMesh(cylMesh, TRS(canPos + glm::vec3(0, 0.065f, 0), glm::vec3(0.2f, 0.02f, 0.2f)), mat(glm::vec3(0.7f, 0.2f, 0.15f), 0, 1, 0.4f));
+    }
     if (!withEffects) return;
     // 빈 칸은 비워 둔다: 어둠 너머 다른 블럭 안이 그대로 보인다 (들어가면 사망)
     Material steam = mat(glm::vec3(0.86f, 0.84f, 0.8f), 0.0f, 1.0f, 0.15f);
@@ -1831,6 +1914,7 @@ void drawWorld(bool withEffects) {
         glColorMaski(1, GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         glDisablei(GL_BLEND, 0);
     }
+    if (inHome) return;
     // 어둠 너머로도 보이는 표식: 톱니, 멜빵, 퇴근 기적
     glDisable(GL_DEPTH_TEST);
     for (const auto& p : pickups) {
@@ -1844,19 +1928,50 @@ void drawWorld(bool withEffects) {
     glEnable(GL_DEPTH_TEST);
 }
 
+void clearFades() { boxFade.clear(); decoFade.clear(); }
+
+// 3인칭 카메라 (연기 모드 기본)
+void tpsCamera(glm::vec3& eye, glm::vec3& fwd, glm::vec3& focus) {
+    focus = pl.pos + glm::vec3(0, 1.55f - pl.landDip, 0);
+    fwd = glm::vec3(sinf(camYaw) * cosf(camPitch), sinf(camPitch), -cosf(camYaw) * cosf(camPitch));
+    glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(0, 1, 0)));
+    eye = focus - fwd * (camDist + camDistBoost) + right * 0.5f;
+    eye.y = std::max(eye.y, 0.4f);
+}
+
+// 홈 벽에 걸린 포스터 (클리어 순간을 찍은 화면)
+void drawPosters(const glm::mat4& view, const glm::mat4& proj) {
+    glUseProgram(posterProg);
+    glUniformMatrix4fv(U(posterProg, "view"), 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(U(posterProg, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
+    glUniform1f(U(posterProg, "farPlane"), FAR_PLANE);
+    glUniform1i(U(posterProg, "tex"), 1);
+    glActiveTexture(GL_TEXTURE1);
+    glBindVertexArray(posterVao);
+    for (int i = 0; i < 3; ++i) {
+        if (!posterTex[i]) continue;
+        glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(-2.6f + i * 2.6f, 1.85f, 3.955f)) * glm::rotate(glm::mat4(1.0f), PI, glm::vec3(0, 1, 0)) * glm::scale(glm::mat4(1.0f), glm::vec3(1.85f, 1.04f, 1.0f));
+        glUniformMatrix4fv(U(posterProg, "model"), 1, GL_FALSE, glm::value_ptr(m));
+        glBindTexture(GL_TEXTURE_2D, posterTex[i]);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+    }
+    glBindVertexArray(0);
+    glActiveTexture(GL_TEXTURE0);
+    glUseProgram(sceneProg);
+}
+
 void renderWorld(int w, int h) {
     if (w != rt.w || h != rt.h) createTargets(w, h);
-    glm::vec3 target = pl.pos + glm::vec3(0, 1.55f - pl.landDip, 0);
-    glm::vec3 fwd(sinf(camYaw) * cosf(camPitch), sinf(camPitch), -cosf(camYaw) * cosf(camPitch));
-    glm::vec3 right = glm::normalize(glm::cross(fwd, glm::vec3(0, 1, 0)));
-    glm::vec3 desired = target - fwd * (camDist + camDistBoost) + right * 0.5f;
-    // 카메라는 밀려 들어오지 않는다. 대신 사이를 가리는 오브젝트를 반투명하게 (지면 아래로만은 못 내려가게)
-    desired.y = std::max(desired.y, 0.4f);
-    updateFades(target, desired);
+    // 카메라는 밀려 들어오지 않는다. 대신 사이를 가리는 오브젝트를 반투명하게
+    glm::vec3 desired, fwd, focus;
+    if (camOv) { desired = camOvPos; fwd = camOvFwd; focus = camOvFocus; }
+    else tpsCamera(desired, fwd, focus);
+    if (inHome) clearFades();
+    else updateFades(focus, desired);
     glm::mat4 view = glm::lookAt(desired, desired + fwd, glm::vec3(0, 1, 0));
     glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)w / (float)h, 0.05f, FAR_PLANE);
-    glm::vec3 center(0, N * CS * 0.5f, 0);
-    float ext = N * CS * 0.85f + 14.0f;
+    glm::vec3 center = inHome ? glm::vec3(0, 1.7f, 0) : glm::vec3(0, N * CS * 0.5f, 0);
+    float ext = inHome ? 8.0f : N * CS * 0.85f + 14.0f;
     glm::mat4 lightVP = glm::ortho(-ext, ext, -ext, ext, 60.0f, 340.0f) * glm::lookAt(center + SUN_DIR * 200.0f, center, glm::vec3(0, 1, 0));
 
     shadowPass = true;
@@ -1901,16 +2016,17 @@ void renderWorld(int w, int h) {
     glUniform3f(sl.groundAmb, 0.32f, 0.27f, 0.23f);
     glUniform3fv(sl.viewPos, 1, glm::value_ptr(desired));
     glUniform3fv(sl.fogColor, 1, glm::value_ptr(SKY_HORIZON));
-    glUniform1f(sl.fogDensity, 0.0035f);
+    glUniform1f(sl.fogDensity, inHome ? 0.0f : 0.0035f);
     glUniform1f(sl.farPlane, FAR_PLANE);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, shadowTex);
     glUniform1i(sl.shadowMap, 0);
-    glm::vec3 lantern = pl.pos + glm::vec3(0, 2.4f, 0);
+    glm::vec3 lantern = inHome ? glm::vec3(0, 2.9f, 0.3f) : pl.pos + glm::vec3(0, 2.4f, 0);
     glUniform3fv(sl.pointPos, 1, glm::value_ptr(lantern));
     glUniform3f(sl.pointColor, 1.0f, 0.82f, 0.55f);
-    glUniform1f(sl.pointPower, 3.0f);
+    glUniform1f(sl.pointPower, inHome ? 7.0f : 3.0f);
     drawWorld(true);
+    if (inHome) drawPosters(view, proj);
 
     glDisable(GL_DEPTH_TEST);
     int bw = std::max(1, w / 2), bh = std::max(1, h / 2);
@@ -1946,6 +2062,7 @@ void renderWorld(int w, int h) {
     glUniform2f(U(compositeProg, "texel"), 1.0f / w, 1.0f / h);
     glUniform1f(U(compositeProg, "film"), filmOn ? 1.0f : 0.0f);
     glUniform1f(U(compositeProg, "flash"), std::max(flashT, deathT));
+    glUniform1f(U(compositeProg, "fade"), fadeAmt);
     glUniform1f(U(compositeProg, "time"), globalTime);
     drawFullscreen();
     glActiveTexture(GL_TEXTURE0);
@@ -1954,7 +2071,7 @@ void renderWorld(int w, int h) {
 // ===================================================================
 // 편집 모드 (씬 조립)
 // ===================================================================
-enum { MODE_SCENE, MODE_EDIT };
+enum { MODE_SCENE, MODE_EDIT, MODE_HOME };     // 연기 모드, 감독 모드, 찰리의 방
 int mode = MODE_SCENE;
 int selPiece = 0;
 float asmYaw = 0.35f, asmPitch = 0.55f, asmZoom = 1.0f;
@@ -2167,6 +2284,38 @@ glm::ivec3 shapeExtent(const Piece& p) {
     return mx;
 }
 
+// 감독 모드 화면용 작은 찰리 (세트 안의 대역 / 세트 밖 감독 의자의 찰리)
+void drawMiniCharlie(glm::vec3 base, float s, float yaw, bool seated, float glow) {
+    glm::mat4 m = glm::translate(glm::mat4(1.0f), base) * glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0, 1, 0)) * glm::scale(glm::mat4(1.0f), glm::vec3(s));
+    glm::vec3 pants(0.12f, 0.12f, 0.14f), overall(0.25f, 0.33f, 0.5f), shirt(0.88f, 0.86f, 0.8f), skin(0.92f, 0.76f, 0.62f), black(0.05f);
+    if (seated) {
+        glm::vec3 wood(0.45f, 0.3f, 0.18f), canvas(0.75f, 0.68f, 0.5f);
+        drawCubePart(m * TRS({ 0, 0.45f, 0 }, { 0.8f, 0.08f, 0.8f }), canvas, 0.0f);
+        drawCubePart(m * TRS({ 0, 0.95f, -0.38f }, { 0.8f, 0.7f, 0.06f }), canvas, 0.0f);
+        for (int sx = -1; sx <= 1; sx += 2)
+            for (int sz = -1; sz <= 1; sz += 2) drawCubePart(m * TRS({ 0.36f * sx, 0.22f, 0.34f * sz }, { 0.06f, 0.45f, 0.06f }), wood, 0.0f);
+        for (int sx = -1; sx <= 1; sx += 2) {
+            drawCubePart(m * TRS({ 0.13f * sx, 0.58f, 0.2f }, { 0.2f, 0.2f, 0.55f }), pants, 0.0f);
+            drawCubePart(m * TRS({ 0.13f * sx, 0.3f, 0.47f }, { 0.2f, 0.55f, 0.2f }), pants, 0.0f);
+        }
+        drawCubePart(m * TRS({ 0, 0.9f, -0.05f }, { 0.5f, 0.5f, 0.3f }), overall, glow);
+        drawCubePart(m * TRS({ 0, 1.25f, -0.05f }, { 0.52f, 0.3f, 0.3f }), shirt, glow);
+        drawCubePart(m * TRS({ 0, 1.55f, -0.05f }, { 0.3f, 0.32f, 0.3f }), skin, glow);
+        drawCubePart(m * TRS({ 0, 1.73f, -0.05f }, { 0.46f, 0.04f, 0.46f }), black, 0.0f);
+        drawCubePart(m * TRS({ 0, 1.83f, -0.05f }, { 0.3f, 0.2f, 0.3f }), black, 0.0f);
+        // 메가폰
+        drawCubePart(m * TRS({ 0.3f, 1.3f, 0.3f }, { 0.12f, 0.12f, 0.55f }), glm::vec3(0.95f, 0.85f, 0.35f), 0.3f);
+        drawCubePart(m * TRS({ 0.3f, 1.3f, 0.6f }, { 0.26f, 0.26f, 0.08f }), glm::vec3(0.95f, 0.85f, 0.35f), 0.3f);
+    } else {
+        for (int sx = -1; sx <= 1; sx += 2) drawCubePart(m * TRS({ 0.13f * sx, 0.4f, 0 }, { 0.2f, 0.8f, 0.22f }), pants, glow);
+        drawCubePart(m * TRS({ 0, 1.05f, 0 }, { 0.5f, 0.5f, 0.3f }), overall, glow);
+        drawCubePart(m * TRS({ 0, 1.42f, 0 }, { 0.52f, 0.3f, 0.3f }), shirt, glow);
+        drawCubePart(m * TRS({ 0, 1.74f, 0 }, { 0.3f, 0.32f, 0.3f }), skin, glow);
+        drawCubePart(m * TRS({ 0, 1.92f, 0 }, { 0.46f, 0.04f, 0.46f }), black, 0.0f);
+        drawCubePart(m * TRS({ 0, 2.02f, 0 }, { 0.3f, 0.2f, 0.3f }), black, 0.0f);
+    }
+}
+
 void renderEdit(int w, int h) {
     layoutSlots(w, h);
     updateHover(w, h);
@@ -2198,8 +2347,12 @@ void renderEdit(int w, int h) {
     glDisable(GL_DEPTH_TEST);
     for (const auto& pk : pickups)
         if (!pk.taken) drawCubePart(TRS(worldToAsm(pk.pos), glm::vec3(0.12f)), pk.type == 0 ? glm::vec3(1.0f, 0.8f, 0.25f) : glm::vec3(0.5f, 0.8f, 1.0f), 0.8f);
-    drawCubePart(TRS(worldToAsm(pl.pos + glm::vec3(0, 0.9f, 0)), glm::vec3(0.1f, 0.18f, 0.1f)), glm::vec3(1.0f), 0.6f + pulse);
+    drawMiniCharlie(worldToAsm(pl.pos), 2.5f / CS, pl.bodyYaw, false, 0.3f + pulse);
     glEnable(GL_DEPTH_TEST);
+    {
+        glm::vec3 chair(-half - 0.9f, -half, half + 0.9f);
+        drawMiniCharlie(chair, 0.45f, atan2f(-chair.x, -chair.z), true, 0.0f);
+    }
     if (hoverValid && !ghostShow) drawBoxEdges(glm::mat4(1.0f), asmCellCenter(hoverTarget), glm::vec3(0.5f), 0.02f, glm::vec3(0.9f, 0.85f, 0.6f), 0.6f);
     if (ghostShow) {
         glEnable(GL_BLEND);
@@ -2329,6 +2482,8 @@ void drawStatus(Batch2D& b, int w, int h, float ui) {
     if (hasMulti) drawText(b, 20 * ui, h - 118 * ui, 1.5f * ui, hasSpanner ? "SPANNER: READY" : "SPANNER: FIND THE SUSPENDERS", hasSpanner ? C_BLUE : C_DIM);
 }
 
+void drawCardHUD(int w, int h);
+const char* STAGE_TITLES_EARLY[3] = { "THE FIRST SHIFT", "OVERTIME", "THE BIG MACHINE" };
 void renderEditHUD(int w, int h) {
     float ui = h / 720.0f;
     Batch2D b;
@@ -2351,7 +2506,7 @@ void renderEditHUD(int w, int h) {
         drawText(t, s.x + 4 * ui, s.y + s.s - 11 * ui, sc, lab, p.placed ? C_DIM : C_WHITE);
         if (p.placed) drawText(t, s.x + s.s - textWidth("IN", 1.4f * ui) - 4 * ui, s.y + 4 * ui, 1.4f * ui, "IN", C_GREEN);
     }
-    drawText(t, 20 * ui, h - 40 * ui, 2.6f * ui, "STAGE " + std::to_string(stage + 1) + "  EDIT  " + gridLabel(N), C_WHITE);
+    drawText(t, 20 * ui, h - 40 * ui, 2.6f * ui, "DIRECTOR MODE  -  " + std::string(STAGE_TITLES_EARLY[std::min(stage, 2)]), C_WHITE);
     drawStatus(t, w, h, ui);
     float y = h - 142 * ui;
     if (selPiece >= 0) {
@@ -2366,13 +2521,14 @@ void renderEditHUD(int w, int h) {
     right(h - 52 * ui, "RMB DRAG ORBIT    WHEEL ZOOM", C_DIM);
     right(h - 70 * ui, "Q/E  W/S  A/D  ROTATE (ALL 24 WAYS)", C_GOLD);
     right(h - 88 * ui, "Z/X OR 1-9 SELECT    BACKSPACE CLEAR", C_DIM);
-    right(h - 106 * ui, "TAB / ENTER  BACK TO THE SCENE", C_GREEN);
+    right(h - 106 * ui, "TAB / ENTER  ACTION! (BACK TO ACTING)", C_GREEN);
     right(h - 124 * ui, "F5 AUTO SOLVE (TEST)", C_DIM);
     right(h - 150 * ui, "DARK PLATE = FLOOR OF THAT BLOCK", C_WHITE);
     right(h - 168 * ui, "GREEN = PUNCH-IN (START)  BRIGHT = WHISTLE (END)", C_WHITE);
     right(h - 186 * ui, "GOLD DOT = COG   BLUE DOT = SUSPENDERS   WHITE = YOU", C_WHITE);
     if (toastT > 0.0f) drawTextCentered(t, w * 0.5f, panelTop + 16 * ui, 2.0f * ui, toast, glm::vec4(1, 0.85f, 0.4f, std::min(1.0f, toastT)));
     flushHUD(t, w, h);
+    drawCardHUD(w, h);
 }
 
 const char* currentRoomName() {
@@ -2388,44 +2544,160 @@ const char* currentRoomName() {
     return "";
 }
 
-void renderSceneHUD(int w, int h) {
-    float ui = h / 720.0f, cx = w * 0.5f;
-    Batch2D b;
-    drawText(b, 20 * ui, h - 40 * ui, 2.6f * ui, "STAGE " + std::to_string(stage + 1) + "  SCENE " + gridLabel(N), C_WHITE);
-    drawStatus(b, w, h, ui);
-    std::string room = currentRoomName();
-    if (!room.empty()) drawTextCentered(b, cx, h - 40 * ui, 2.0f * ui, room, glm::vec4(1, 0.92f, 0.75f, 0.85f));
-    if (transitioning) drawTextCentered(b, cx, h * 0.82f, 2.4f * ui, "REASSEMBLING...", glm::vec4(1.0f, 0.85f, 0.35f, 0.8f + 0.2f * sinf(globalTime * 8.0f)));
-    else {
-        if (pl.inLift) drawTextCentered(b, cx, h * 0.3f, 1.8f * ui, "STEAM LIFT - SPACE UP / CTRL DOWN", C_BLUE);
-        if (pl.onLadder) drawTextCentered(b, cx, h * 0.3f, 1.8f * ui, "LADDER - W UP / S DOWN", C_BLUE);
-        if (nearestBolt() >= 0) drawTextCentered(b, cx, h * 0.34f, 2.0f * ui, hasSpanner ? "E  UNSCREW BOLT" : "BOLTED PANEL - NEED THE SPANNER", hasSpanner ? C_BLUE : C_DIM);
+// ===================================================================
+// 진행 상태 / 연출 시퀀스
+// ===================================================================
+enum { SEQ_NONE, SEQ_PACK, SEQ_INTRO, SEQ_DIRECTOR, SEQ_THE_END, SEQ_MIRROR, SEQ_SHELF };
+int seq = SEQ_NONE;
+float seqT = 0.0f;
+bool seqLong = false;                   // 감독 모드 전환: 스테이지 첫 번째만 크레인 연출
+bool craneShown = false;
+bool peeking = false, tabHeld = false;
+double tabDownTime = 0.0;
+float peekBlend = 0.0f;
+int progress = 0;                       // 클리어한 스테이지 수 (다음 촬영 = progress)
+int pendingStage = 0, shelfIdx = 0;
+bool posterCaptured = false, capturePosterNow = false;
+std::string cardText;
+float cardT = 0.0f;
+const int STAGE_COUNT = 3;
+const char* STAGE_TITLES[STAGE_COUNT] = { "THE FIRST SHIFT", "OVERTIME", "THE BIG MACHINE" };
+double lastMouseX = 0.0, lastMouseY = 0.0;
+bool firstMouse = true;
+
+void setCard(const std::string& s, float d) { cardText = s; cardT = d; }
+float smooth01(float x) { x = glm::clamp(x, 0.0f, 1.0f); return x * x * (3.0f - 2.0f * x); }
+void setCamLook(glm::vec3 pos, glm::vec3 target) { camOv = true; camOvPos = pos; camOvFwd = glm::normalize(target - pos); camOvFocus = target; }
+glm::vec3 sceneCenter() { return glm::vec3(0, N * CS * 0.5f, 0); }
+glm::vec3 overheadPos() { float W = N * CS, H = N * CS + 2.0f; return glm::vec3(0, H + W * 0.35f + 6.0f, W * 0.8f); }
+std::string stageLabel(int s) { const int sz[3] = { 2, 3, 4 }; return std::string("TAKE ") + std::to_string(s + 1) + ": " + STAGE_TITLES[s] + "  (" + gridLabel(sz[s]) + " SET)"; }
+
+// ===================================================================
+// 찰리의 방 (홈)
+// ===================================================================
+enum { IK_SCHEDULE, IK_MIRROR, IK_SHELF };
+struct Interact { glm::vec3 pos; float r; int kind, idx; std::string label; };
+std::vector<Interact> interacts;
+int hoverInteract = -1;
+
+void buildHome() {
+    boxes.clear(); decos.clear(); shafts.clear(); ladders.clear(); vents.clear(); bolts.clear(); voidCells.clear(); puffs.clear(); sparks.clear();
+    interacts.clear();
+    curChunk = -1;
+    Material floorM = mat(glm::vec3(0.46f, 0.32f, 0.2f), 0.2f, 16.0f, 0.0f, 1), wall = mat(glm::vec3(0.66f, 0.58f, 0.46f), 0.05f, 8.0f, 0.0f, 2);
+    Material ceil = mat(glm::vec3(0.55f, 0.5f, 0.42f), 0.05f, 8.0f), wood = mat(glm::vec3(0.4f, 0.26f, 0.15f), 0.2f, 16.0f, 0.0f, 2), dark = mat(glm::vec3(0.12f, 0.1f, 0.09f), 0.3f, 16.0f);
+    Material cork = mat(glm::vec3(0.62f, 0.45f, 0.28f), 0.05f, 8.0f, 0.0f, 2), sheet = mat(glm::vec3(0.85f, 0.82f, 0.74f), 0.1f, 8.0f), red = mat(glm::vec3(0.55f, 0.16f, 0.14f), 0.1f, 8.0f, 0.0f, 2);
+    addBox({ 0, -0.1f, 0 }, { 9.4f, 0.2f, 8.4f }, floorM);
+    addBox({ 0, 3.5f, 0 }, { 9.4f, 0.2f, 8.4f }, ceil);
+    addBox({ 4.6f, 1.7f, 0 }, { 0.2f, 3.4f, 8.4f }, wall);
+    addBox({ -4.6f, 1.7f, 0 }, { 0.2f, 3.4f, 8.4f }, wall);
+    addBox({ 0, 1.7f, 4.1f }, { 9.4f, 3.4f, 0.2f }, wall);
+    addBox({ 0, 1.7f, -4.1f }, { 9.4f, 3.4f, 0.2f }, wall);
+    addBox({ 0, 0.01f, 0.4f }, { 3.4f, 0.02f, 2.4f }, red, false);
+    // 침대, 의자
+    addBox({ -3.4f, 0.3f, 2.6f }, { 1.8f, 0.6f, 2.8f }, wood);
+    addBox({ -3.4f, 0.65f, 2.75f }, { 1.7f, 0.12f, 2.4f }, mat(glm::vec3(0.75f, 0.72f, 0.65f), 0.05f, 8.0f), false);
+    addBox({ -3.4f, 0.78f, 3.6f }, { 1.2f, 0.2f, 0.5f }, sheet, false);
+    addBox({ 0.0f, 0.24f, -2.4f }, { 0.6f, 0.48f, 0.6f }, wood);
+    // 촬영 스케줄 보드 (-Z 벽) + 아래 책상 (필름통)
+    addBox({ 0, 0.45f, -3.45f }, { 2.6f, 0.9f, 1.0f }, wood);
+    addBox({ 0, 1.95f, -3.97f }, { 3.8f, 1.8f, 0.06f }, cork, false);
+    addBox({ 0, 2.92f, -3.95f }, { 3.9f, 0.12f, 0.1f }, dark, false);
+    addBox({ 0, 0.98f, -3.95f }, { 3.9f, 0.12f, 0.1f }, dark, false);
+    for (int i = 0; i < STAGE_COUNT; ++i) {
+        glm::vec3 p(-1.2f + i * 1.2f, 1.95f, -3.92f);
+        bool done = i < progress, next = i == progress, locked = i > progress;
+        glm::vec3 col = done ? glm::vec3(0.75f, 0.86f, 0.7f) : next ? glm::vec3(0.98f, 0.95f, 0.85f) : glm::vec3(0.35f, 0.34f, 0.32f);
+        addBox(p, { 0.95f, 1.35f, 0.03f }, mat(col, 0.1f, 8.0f, next ? 0.5f + 0.0f : 0.0f), false);
+        addBox(p + glm::vec3(0, 0.5f, 0.02f), { 0.75f, 0.12f, 0.02f }, dark, false);                       // 제목 줄
+        for (int k = 0; k < i + 2; ++k) addBox(p + glm::vec3(-0.3f + k * 0.2f, 0.1f, 0.02f), { 0.15f, 0.15f, 0.02f }, dark, false);   // 세트 크기 표시
+        if (done) addBox(p + glm::vec3(0, -0.4f, 0.025f), { 0.5f, 0.12f, 0.02f }, mat(glm::vec3(0.2f, 0.7f, 0.25f), 0, 1, 0.6f), false);
+        if (locked) addBox(p + glm::vec3(0, -0.4f, 0.025f), { 0.5f, 0.12f, 0.02f }, mat(glm::vec3(0.5f, 0.12f, 0.1f)), false);
+        std::string st = done ? "  [WRAPPED - RESHOOT]" : next ? "  [NEXT SHOOT]" : "  [NOT SCHEDULED]";
+        interacts.push_back({ p, 0.6f, IK_SCHEDULE, i, stageLabel(i) + st });
     }
-    if (toastT > 0.0f) drawTextCentered(b, cx, h * 0.72f, 2.0f * ui, toast, glm::vec4(1, 0.85f, 0.4f, std::min(1.0f, toastT)));
-    drawText(b, 16 * ui, 14 * ui, 1.3f * ui, std::to_string((int)fps) + " FPS   DEATHS " + std::to_string(deaths), glm::vec4(1, 1, 1, 0.45f));
-    std::string tip = "TAB EDIT   R BACK TO START   F1 FILM";
-    drawText(b, w - textWidth(tip, 1.4f * ui) - 20 * ui, 14 * ui, 1.4f * ui, tip, C_DIM);
-    if (helpT > 0.0f) {
-        glm::vec4 hc(1, 1, 1, std::min(1.0f, helpT) * 0.9f);
-        drawTextCentered(b, cx, h * 0.2f, 1.7f * ui, "WASD MOVE   MOUSE LOOK   SPACE JUMP (CHAIN 3 JUMPS WHILE RUNNING)   SHIFT RUN", hc);
-        drawTextCentered(b, cx, h * 0.2f - 20 * ui, 1.7f * ui, "THE DARK IS EMPTY SPACE - TAB TO EDIT AND BUILD YOUR ROUTE WITH BLOCKS", hc);
-        drawTextCentered(b, cx, h * 0.2f - 40 * ui, 1.7f * ui, "GET EVERY COG, FILL THE WHOLE SCENE, THEN BLOW THE WHISTLE AT THE TOP", hc);
+    // 거울 (+X 벽)
+    addBox({ 4.47f, 1.6f, 0 }, { 0.06f, 2.1f, 1.2f }, dark, false);
+    addBox({ 4.43f, 1.6f, 0 }, { 0.02f, 1.9f, 1.0f }, mat(glm::vec3(0.75f, 0.8f, 0.85f), 1.0f, 96.0f, 0.35f), false);
+    interacts.push_back({ { 4.4f, 1.6f, 0 }, 0.9f, IK_MIRROR, 0, "MIRROR - CHARLIE AND HIS ABILITIES" });
+    // 필름 선반 (-X 벽): 이미 찍은 영화 = 다단블럭
+    for (float y : { 1.2f, 1.9f }) addBox({ -4.25f, y, -0.6f }, { 0.5f, 0.06f, 2.6f }, wood);
+    Material can = mat(glm::vec3(0.7f, 0.72f, 0.75f), 1.0f, 64.0f);
+    for (int i = 0; i < (int)library.size(); ++i) {
+        glm::vec3 p(-4.25f, 1.23f + 0.07f + (i / 4) * 0.7f, -1.5f + (i % 4) * 0.6f);
+        decos.push_back({ glm::translate(glm::mat4(1.0f), p), D_STATIC, 1, 0, glm::vec3(0.5f, 0.14f, 0.5f), can, 0, 0, 0, -1 });
+        decos.push_back({ glm::translate(glm::mat4(1.0f), p + glm::vec3(0, 0.08f, 0)), D_STATIC, 1, 0, glm::vec3(0.2f, 0.03f, 0.2f), mat(glm::vec3(0.7f, 0.2f, 0.15f), 0, 1, 0.4f), 0, 0, 0, -1 });
+        std::string t = library[i].fromStage >= 0 ? STAGE_TITLES[library[i].fromStage] : "FILM";
+        interacts.push_back({ p, 0.4f, IK_SHELF, i, std::string("FILM: ") + t + " (" + library[i].name + ")" });
     }
-    if (stageClear) {
-        float a = std::min(1.0f, clearT);
-        b.rect(0, h * 0.42f, (float)w, 130 * ui, glm::vec4(0, 0, 0, 0.55f * a));
-        drawTextCentered(b, cx, h * 0.42f + 78 * ui, 5.0f * ui, "SHIFT COMPLETE!", glm::vec4(1.0f, 0.85f, 0.35f, a));
-        drawTextCentered(b, cx, h * 0.42f + 40 * ui, 2.0f * ui, "THIS " + gridLabel(N) + " SCENE BECOMES YOUR MULTI BLOCK", glm::vec4(1, 1, 1, a));
-        drawTextCentered(b, cx, h * 0.42f + 14 * ui, 2.0f * ui, "PRESS ENTER FOR THE NEXT SHIFT", glm::vec4(0.5f, 1.0f, 0.55f, a * (0.7f + 0.3f * sinf(globalTime * 5.0f))));
+    if (library.empty()) interacts.push_back({ { -4.25f, 1.5f, -0.6f }, 0.9f, IK_SHELF, -1, "FILM SHELF - NOTHING SHOT YET" });
+    // 포스터 액자 (+Z 벽)
+    for (int i = 0; i < STAGE_COUNT; ++i) {
+        addBox({ -2.6f + i * 2.6f, 1.85f, 3.98f }, { 2.05f, 1.25f, 0.04f }, posterTex[i] ? dark : mat(glm::vec3(0.4f, 0.36f, 0.3f)), false);
     }
-    flushHUD(b, w, h);
+    // 천장 등
+    decos.push_back({ glm::translate(glm::mat4(1.0f), glm::vec3(0, 3.25f, 0.3f)), D_STATIC, 1, 0, glm::vec3(0.6f, 0.25f, 0.6f), mat(glm::vec3(1.0f, 0.9f, 0.7f), 0, 1, 3.0f), 0, 0, 0, -1 });
+}
+
+void updateHomeHover() {
+    hoverInteract = -1;
+    glm::vec3 eye = pl.pos + glm::vec3(0, 1.62f, 0);
+    glm::vec3 f(sinf(camYaw) * cosf(camPitch), sinf(camPitch), -cosf(camYaw) * cosf(camPitch));
+    float best = 3.5f;
+    for (int i = 0; i < (int)interacts.size(); ++i) {
+        glm::vec3 v = interacts[i].pos - eye;
+        float t = glm::dot(v, f);
+        if (t < 0.0f || t > best) continue;
+        if (glm::length(v - f * t) < interacts[i].r) { best = t; hoverInteract = i; }
+    }
+}
+
+void enterHome() {
+    inHome = true;
+    mode = MODE_HOME;
+    seq = SEQ_NONE;
+    transitioning = false;
+    peeking = tabHeld = false;
+    peekBlend = 0.0f;
+    stageClear = false;
+    pickups.clear();
+    hasSpanner = false;
+    buildHome();
+    pl = Player{};
+    pl.pos = glm::vec3(0, 0, 1.8f);
+    camYaw = 0.0f;
+    camPitch = -0.05f;
+    lastSafe = SafeSpot{};
+    clearFades();
+    firstMouse = true;
+    glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 }
 
 // ===================================================================
-// 모드 전환 / 입력
+// 촬영 (스테이지)
 // ===================================================================
-double lastMouseX = 0.0, lastMouseY = 0.0;
-bool firstMouse = true;
+void startStage(int idx) {
+    stage = idx;
+    inHome = false;
+    generateStage();
+    selPiece = 0;
+    buildWorld();
+    chunkM.assign(pieces.size() + 2, glm::mat4(1.0f));
+    resetPlayer();
+    mode = MODE_SCENE;
+    craneShown = false;
+    posterCaptured = false;
+    stageClear = false;
+    peeking = tabHeld = false;
+    peekBlend = 0.0f;
+    deaths = 0;
+    clearFades();
+    firstMouse = true;
+    glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    std::cout << "촬영 시작: " << stageLabel(idx) << ", 블럭 조각 " << pieces.size() << "개\n";
+}
+
+void startIntro() { seq = SEQ_INTRO; seqT = 0.0f; helpT = 0.0f; }
 
 void openEdit() {
     if (transitioning || stageClear) return;
@@ -2440,35 +2712,321 @@ void closeEdit() {
     mode = MODE_SCENE;
     firstMouse = true;
     glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    setCard("ACTION!", 0.8f);
     startTransition();
     if (!transitioning) buildWorld();
-    std::cout << "편집 반영: 연출 이벤트 " << trEvents.size() << "개, " << trTotal << "초\n";
 }
 
-void startStage() {
-    generateStage();
-    selPiece = 0;
-    buildWorld();
-    chunkM.assign(pieces.size() + 2, glm::mat4(1.0f));
-    resetPlayer();
-    mode = MODE_SCENE;
-    helpT = 12.0f;
-    glfwSetInputMode(gWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    firstMouse = true;
+// 감독 모드로: 스테이지 첫 번째는 크레인을 타고 지붕 위로, 이후는 "컷!" 한 번에 빠르게
+void beginDirector() {
+    if (transitioning || stageClear || seq != SEQ_NONE) return;
+    seq = SEQ_DIRECTOR;
+    seqT = 0.0f;
+    seqLong = !craneShown;
+    setCard("CUT!", seqLong ? 0.9f : 0.5f);
 }
 
-void nextStage() {
+void returnHome() {
     saveCustomBlock();
-    std::string saved = library.back().name;
-    ++stage;
-    startStage();
-    showToast("NEW MULTI BLOCK: " + saved);
-    std::cout << "스테이지 " << stage + 1 << " (" << N << "x" << N << "x" << N << "), 조각 " << pieces.size() << "개, 다단블럭 " << library.size() << "개\n";
+    progress = std::max(progress, std::min(stage + 1, STAGE_COUNT));
+    std::string t = STAGE_TITLES[stage];
+    enterHome();
+    showToast("FILM WRAPPED: " + t);
 }
 
+void activateHover() {
+    if (hoverInteract < 0) return;
+    const Interact& it = interacts[hoverInteract];
+    if (it.kind == IK_SCHEDULE) {
+        if (it.idx > progress) { showToast("NOT ON THE SCHEDULE YET"); return; }
+        pendingStage = it.idx;
+        seq = SEQ_PACK;
+        seqT = 0.0f;
+    } else if (it.kind == IK_MIRROR) {
+        seq = SEQ_MIRROR;
+    } else {
+        if (library.empty()) { showToast("NO FILMS ON THE SHELF YET"); return; }
+        shelfIdx = std::max(0, it.idx);
+        seq = SEQ_SHELF;
+    }
+}
+
+void updateSequences(float dt) {
+    camOv = false;
+    wOverride.on = false;
+    craneActive = false;
+    fadeAmt = 0.0f;
+    cardT = std::max(0.0f, cardT - dt);
+    if (mode == MODE_HOME) {
+        glm::vec3 eye = pl.pos + glm::vec3(0, 1.62f, 0);
+        glm::vec3 f(sinf(camYaw) * cosf(camPitch), sinf(camPitch), -cosf(camYaw) * cosf(camPitch));
+        canPos = CAN_DESK;
+        if (seq == SEQ_PACK) {
+            // 필름통을 챙겨 들고 → 암전 → 촬영장
+            seqT += dt;
+            float a = smooth01(seqT / 0.6f);
+            glm::vec3 pos = glm::mix(eye, glm::vec3(0.5f, 1.65f, -1.9f), a), tgt = glm::mix(eye + f, CAN_DESK, a);
+            setCamLook(pos, tgt);
+            canPos = glm::mix(CAN_DESK, pos + glm::normalize(tgt - pos) * 0.6f - glm::vec3(0, 0.15f, 0), smooth01((seqT - 0.5f) / 0.7f));
+            fadeAmt = smooth01((seqT - 0.9f) / 0.5f);
+            if (seqT >= 1.45f) { startStage(pendingStage); startIntro(); fadeAmt = 1.0f; }
+        } else if (seq == SEQ_MIRROR) {
+            setCamLook(glm::vec3(4.3f, 1.4f, 0.0f), glm::vec3(2.3f, 1.05f, 0.0f));
+            wOverride.on = true;
+            wOverride.pos = glm::vec3(2.3f, 0.0f, 0.0f);
+            wOverride.yaw = PI * 0.5f;
+            wOverride.seated = false;
+        } else {
+            camOv = true;
+            camOvPos = eye;
+            camOvFwd = f;
+            camOvFocus = eye + f;
+        }
+        return;
+    }
+    if (mode != MODE_SCENE) return;
+    glm::vec3 tpsPos, tpsFwd, tpsFocus;
+    tpsCamera(tpsPos, tpsFwd, tpsFocus);
+    glm::vec3 c = sceneCenter();
+    float W = N * CS, H = N * CS + 2.0f;
+
+    // 엿보기: Tab 을 누르고 있는 동안 지붕 위에서 내려다본다
+    if (seq == SEQ_NONE && tabHeld && !peeking && glfwGetTime() - tabDownTime > 0.25) peeking = true;
+    peekBlend = glm::clamp(peekBlend + (peeking && seq == SEQ_NONE ? dt : -dt) * 4.0f, 0.0f, 1.0f);
+
+    if (seq == SEQ_INTRO) {
+        // 세트 전체 → 목적지(퇴근 기적) → 찰리 뒤
+        seqT += dt;
+        fadeAmt = 1.0f - smooth01(seqT / 0.4f);
+        glm::vec3 p0 = c + glm::vec3(-W * 0.85f, H * 0.75f, -W * 0.85f);
+        glm::vec3 gd = goalPos - c;
+        gd.y = 0.0f;
+        gd = glm::length(gd) > 0.1f ? glm::normalize(gd) : glm::vec3(0, 0, 1);
+        glm::vec3 p1 = goalPos + gd * 9.0f + glm::vec3(0, 5.0f, 0);
+        glm::vec3 pos, tgt;
+        if (seqT < 1.6f) { float a = smooth01(seqT / 1.6f); pos = glm::mix(p0, p1, a) + glm::vec3(0, sinf(a * PI) * W * 0.25f, 0); tgt = glm::mix(c, goalPos, a); }
+        else if (seqT < 2.5f) { float a = (seqT - 1.6f) / 0.9f; pos = glm::mix(p1, goalPos + gd * 6.0f + glm::vec3(0, 3.0f, 0), a * 0.5f); tgt = goalPos; }
+        else { float a = smooth01((seqT - 2.5f) / 1.3f); pos = glm::mix(goalPos + gd * 7.5f + glm::vec3(0, 4.0f, 0), tpsPos, a); tgt = glm::mix(goalPos, tpsFocus, a); }
+        setCamLook(pos, tgt);
+        if (seqT >= 3.8f) { seq = SEQ_NONE; setCard("ACTION!", 0.8f); helpT = 10.0f; camOv = false; }
+    } else if (seq == SEQ_DIRECTOR) {
+        seqT += dt;
+        glm::vec3 over = overheadPos();
+        if (!seqLong) {
+            float a = smooth01(seqT / 0.4f);
+            camOv = true;
+            camOvPos = glm::mix(tpsPos, over, a);
+            camOvFwd = glm::normalize(glm::mix(tpsFwd, glm::normalize(c - over), a));
+            camOvFocus = glm::mix(tpsFocus, c, a);
+            if (seqT >= 0.4f) { seq = SEQ_NONE; openEdit(); }
+        } else {
+            // 크레인이 내려와 찰리를 태우고 지붕 위로
+            craneActive = true;
+            glm::vec3 seat = pl.pos + glm::vec3(0, 0.55f, 0), above(pl.pos.x, H + 9.0f, pl.pos.z);
+            glm::vec3 tipAtSeat = seat + glm::vec3(0, 2.2f, 0), rest = craneRestTip();
+            glm::vec3 horiz = glm::normalize(glm::vec3(tpsFwd.x, 0.0f, tpsFwd.z) + glm::vec3(0.0001f));
+            if (seqT < 0.5f) craneTip = glm::mix(rest, above, smooth01(seqT / 0.5f));
+            else if (seqT < 1.0f) craneTip = glm::mix(above, tipAtSeat, smooth01((seqT - 0.5f) / 0.5f));
+            else if (seqT < 1.25f) craneTip = tipAtSeat;
+            else craneTip = glm::mix(tipAtSeat, above + glm::vec3(0, 4.0f, 0), smooth01((seqT - 1.25f) / 1.15f));
+            if (seqT >= 1.0f) {
+                wOverride.on = true;
+                wOverride.pos = craneTip - glm::vec3(0, 2.2f, 0) - glm::vec3(0, 0.45f, 0);
+                wOverride.yaw = pl.bodyYaw;
+                wOverride.seated = true;
+            }
+            glm::vec3 seatNow = craneTip - glm::vec3(0, 2.2f, 0);
+            glm::vec3 toC = glm::vec3(c.x - pl.pos.x, 0.0f, c.z - pl.pos.z);
+            toC = glm::length(toC) > 0.5f ? glm::normalize(toC) : -horiz;
+            // 크레인이 내려오는 동안은 찰리를, 태운 뒤에는 올라가는 의자를 본다
+            glm::vec3 follow = seqT < 1.25f ? seat : seatNow;
+            glm::vec3 watch = follow + toC * 7.0f + glm::vec3(0, 1.8f, 0);
+            if (seqT < 2.4f) {
+                float a = smooth01(seqT / 0.5f);
+                camOv = true;
+                camOvPos = glm::mix(tpsPos, watch, a);
+                camOvFocus = glm::mix(tpsFocus, follow + glm::vec3(0, 0.8f, 0), a);
+                camOvFwd = glm::normalize(camOvFocus - camOvPos);
+            } else {
+                float a = smooth01((seqT - 2.4f) / 0.4f);
+                glm::vec3 from = watch;
+                camOv = true;
+                camOvPos = glm::mix(from, over, a);
+                camOvFwd = glm::normalize(glm::mix(glm::normalize(seatNow - from), glm::normalize(c - over), a));
+                camOvFocus = glm::mix(seatNow, c, a);
+            }
+            if (seqT >= 2.8f) { seq = SEQ_NONE; craneShown = true; openEdit(); }
+        }
+    } else if (seq == SEQ_THE_END) {
+        seqT += dt;
+        float ang = seqT * 0.22f + 0.7f;
+        setCamLook(c + glm::vec3(sinf(ang) * W * 0.9f, H * 0.55f + W * 0.2f, cosf(ang) * W * 0.9f), c);
+        if (!posterCaptured && seqT > 0.7f) capturePosterNow = true;
+    } else if (peekBlend > 0.001f) {
+        float a = smooth01(peekBlend);
+        glm::vec3 over = overheadPos();
+        camOv = true;
+        camOvPos = glm::mix(tpsPos, over, a);
+        camOvFwd = glm::normalize(glm::mix(tpsFwd, glm::normalize(c - over), a));
+        camOvFocus = glm::mix(tpsFocus, c, a);
+    }
+}
+
+void capturePoster(int w, int h) {
+    if (stage < 0 || stage >= STAGE_COUNT) return;
+    if (!posterTex[stage]) glGenTextures(1, &posterTex[stage]);
+    glBindTexture(GL_TEXTURE_2D, posterTex[stage]);
+    glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, 0, 0, w, h, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    posterCaptured = true;
+    capturePosterNow = false;
+    std::cout << "포스터 촬영: " << STAGE_TITLES[stage] << "\n";
+}
+
+// ===================================================================
+// 홈 화면 / 필름 선반 보기 / 자막 카드 / 씬 HUD
+// ===================================================================
+void renderShelfView(int w, int h) {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, w, h);
+    glClearColor(0.07f, 0.06f, 0.05f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+    glUseProgram(cubeProg);
+    const Piece& p = library[shelfIdx];
+    glm::vec3 ext = glm::vec3(shapeExtent(p)) + 1.0f;
+    float e = std::max(ext.x, std::max(ext.y, ext.z));
+    cubeVP = glm::perspective(glm::radians(32.0f), (float)w / h, 0.1f, 100.0f) * glm::lookAt(glm::vec3(0.6f, 0.55f, 1.0f) * (e * 1.9f + 1.0f), glm::vec3(0.0f), glm::vec3(0, 1, 0)) *
+             glm::rotate(glm::mat4(1.0f), globalTime * 0.4f, glm::vec3(0, 1, 0));
+    drawPieceVis(p, -(ext - 1.0f) * 0.5f, 1.0f, glm::vec3(0), 0.0f, 0.0f);
+    glBindVertexArray(0);
+}
+
+void drawCardHUD(int w, int h) {
+    if (cardT <= 0.0f) return;
+    float ui = h / 720.0f, a = std::min(1.0f, cardT * 5.0f);
+    Batch2D b;
+    float bw = 420 * ui, bh = 170 * ui, x = (w - bw) * 0.5f, y = (h - bh) * 0.5f;
+    b.rect(x, y, bw, bh, glm::vec4(0.02f, 0.02f, 0.02f, 0.92f * a));
+    b.frame(x + 8 * ui, y + 8 * ui, bw - 16 * ui, bh - 16 * ui, 2 * ui, glm::vec4(0.95f, 0.92f, 0.82f, a));
+    b.frame(x + 14 * ui, y + 14 * ui, bw - 28 * ui, bh - 28 * ui, 1 * ui, glm::vec4(0.95f, 0.92f, 0.82f, 0.6f * a));
+    drawTextCentered(b, w * 0.5f, h * 0.5f - 18 * ui, 6.0f * ui, cardText, glm::vec4(0.97f, 0.94f, 0.85f, a));
+    flushHUD(b, w, h);
+}
+
+void renderHomeHUD(int w, int h) {
+    float ui = h / 720.0f, cx = w * 0.5f;
+    Batch2D b;
+    if (seq == SEQ_SHELF) {
+        const Piece& p = library[shelfIdx];
+        std::string t = p.fromStage >= 0 ? STAGE_TITLES[p.fromStage] : "FILM";
+        drawTextCentered(b, cx, h - 50 * ui, 2.6f * ui, "FILM " + std::to_string(shelfIdx + 1) + "/" + std::to_string(library.size()) + ": " + t, C_GOLD);
+        drawTextCentered(b, cx, h - 76 * ui, 1.6f * ui, "YOUR CUT, SAVED AS A " + p.name.substr(3) + " MULTI BLOCK", C_WHITE);
+        drawTextCentered(b, cx, 30 * ui, 1.5f * ui, "A / D  BROWSE      ESC / CLICK  BACK", C_DIM);
+    } else if (seq == SEQ_MIRROR) {
+        float x = 40 * ui, y = h - 80 * ui;
+        b.rect(x - 16 * ui, y - 250 * ui, 560 * ui, 290 * ui, glm::vec4(0, 0, 0, 0.55f));
+        drawText(b, x, y, 2.6f * ui, "CHARLIE", C_GOLD);
+        drawText(b, x, y - 26 * ui, 1.6f * ui, "FACTORY WORKER. ACTOR. DIRECTOR.", C_WHITE);
+        drawText(b, x, y - 64 * ui, 1.8f * ui, "ABILITIES", C_GOLD);
+        drawText(b, x, y - 90 * ui, 1.5f * ui, "JUMP - CHAIN UP TO 3 JUMPS WHILE RUNNING", C_WHITE);
+        drawText(b, x, y - 112 * ui, 1.5f * ui, "SUSPENDERS - FOUND ON SET. LETS YOU UNSCREW", C_WHITE);
+        drawText(b, x, y - 130 * ui, 1.5f * ui, "             BOLTED PANELS (THAT SHOOT ONLY)", C_WHITE);
+        drawText(b, x, y - 158 * ui, 1.5f * ui, "MORE ABILITIES COMING SOON", C_DIM);
+        drawText(b, x, y - 192 * ui, 1.5f * ui, "FILMS WRAPPED: " + std::to_string(progress) + "/" + std::to_string(STAGE_COUNT), C_BLUE);
+        drawText(b, x, y - 216 * ui, 1.4f * ui, "ESC / CLICK  BACK", C_DIM);
+    } else if (seq == SEQ_NONE) {
+        b.rect(cx - 2 * ui, h * 0.5f - 2 * ui, 4 * ui, 4 * ui, glm::vec4(1, 1, 1, 0.8f));
+        drawText(b, 20 * ui, h - 40 * ui, 2.6f * ui, "CHARLIE'S ROOM", C_WHITE);
+        drawText(b, 20 * ui, h - 64 * ui, 1.5f * ui, "FILMS WRAPPED " + std::to_string(progress) + "/" + std::to_string(STAGE_COUNT), C_GOLD);
+        if (hoverInteract >= 0) drawTextCentered(b, cx, h * 0.5f - 46 * ui, 1.8f * ui, "CLICK - " + interacts[hoverInteract].label, C_GOLD);
+        else if (progress < STAGE_COUNT) drawTextCentered(b, cx, h * 0.5f - 46 * ui, 1.5f * ui, "THE SHOOTING SCHEDULE IS ON THE BOARD", C_DIM);
+        else drawTextCentered(b, cx, h * 0.5f - 46 * ui, 1.8f * ui, "ALL FILMS WRAPPED - THAT'S A WRAP!", C_GREEN);
+        std::string tip = "WASD MOVE   MOUSE LOOK   CLICK / E USE   ESC QUIT   F1 FILM";
+        drawText(b, w - textWidth(tip, 1.4f * ui) - 20 * ui, 14 * ui, 1.4f * ui, tip, C_DIM);
+    }
+    if (toastT > 0.0f) drawTextCentered(b, cx, h * 0.72f, 2.0f * ui, toast, glm::vec4(1, 0.85f, 0.4f, std::min(1.0f, toastT)));
+    flushHUD(b, w, h);
+}
+
+void renderSceneHUD(int w, int h) {
+    float ui = h / 720.0f, cx = w * 0.5f;
+    Batch2D b;
+    bool cinematic = seq == SEQ_INTRO || seq == SEQ_THE_END || (seq == SEQ_DIRECTOR && seqLong);
+    if (cinematic) {
+        // 영화 화면비 띠
+        b.rect(0, 0, (float)w, h * 0.1f, glm::vec4(0, 0, 0, 1));
+        b.rect(0, h * 0.9f, (float)w, h * 0.1f, glm::vec4(0, 0, 0, 1));
+    }
+    if (seq == SEQ_INTRO) {
+        drawTextCentered(b, cx, h * 0.93f, 2.4f * ui, stageLabel(stage), glm::vec4(0.97f, 0.94f, 0.85f, 1));
+        std::string sub = seqT < 1.6f ? "THE SET" : seqT < 2.6f ? "DESTINATION: THE QUITTING WHISTLE" : "AND OUR STAR...";
+        drawTextCentered(b, cx, h * 0.035f, 1.8f * ui, sub, glm::vec4(0.97f, 0.94f, 0.85f, 0.9f));
+        drawText(b, w - textWidth("ANY KEY SKIP", 1.3f * ui) - 16 * ui, h * 0.035f, 1.3f * ui, "ANY KEY SKIP", C_DIM);
+    } else if (seq == SEQ_THE_END) {
+        float a = std::min(1.0f, seqT);
+        drawTextCentered(b, cx, h * 0.62f, 7.0f * ui, "THE END", glm::vec4(0.97f, 0.94f, 0.85f, a));
+        drawTextCentered(b, cx, h * 0.52f, 2.2f * ui, std::string(STAGE_TITLES[stage]) + " - A FILM BY CHARLIE", glm::vec4(0.97f, 0.94f, 0.85f, a));
+        drawTextCentered(b, cx, h * 0.46f, 1.6f * ui, "THIS " + gridLabel(N) + " SET IS SAVED AS YOUR MULTI BLOCK", glm::vec4(1, 1, 1, 0.8f * a));
+        if (seqT > 1.2f) drawTextCentered(b, cx, h * 0.035f, 1.8f * ui, "ENTER / CLICK - BACK HOME", glm::vec4(0.5f, 1.0f, 0.55f, 0.7f + 0.3f * sinf(globalTime * 5.0f)));
+    } else if (!(seq == SEQ_DIRECTOR)) {
+        drawText(b, 20 * ui, h - 40 * ui, 2.2f * ui, stageLabel(stage), C_WHITE);
+        drawStatus(b, w, h, ui);
+        std::string room = currentRoomName();
+        if (!room.empty() && peekBlend < 0.5f) drawTextCentered(b, cx, h - 40 * ui, 2.0f * ui, room, glm::vec4(1, 0.92f, 0.75f, 0.85f));
+        if (transitioning) drawTextCentered(b, cx, h * 0.82f, 2.2f * ui, "RESETTING THE SET...  (SPACE SKIP)", glm::vec4(1.0f, 0.85f, 0.35f, 0.8f + 0.2f * sinf(globalTime * 8.0f)));
+        else if (peekBlend > 0.5f) drawTextCentered(b, cx, h * 0.1f, 1.8f * ui, "PEEKING - RELEASE TAB TO RETURN", C_BLUE);
+        else {
+            if (pl.inLift) drawTextCentered(b, cx, h * 0.3f, 1.8f * ui, "STEAM LIFT - SPACE UP / CTRL DOWN", C_BLUE);
+            if (pl.onLadder) drawTextCentered(b, cx, h * 0.3f, 1.8f * ui, "LADDER - W UP / S DOWN", C_BLUE);
+            if (nearestBolt() >= 0) drawTextCentered(b, cx, h * 0.34f, 2.0f * ui, hasSpanner ? "E  UNSCREW BOLT" : "BOLTED PANEL - NEED THE SUSPENDERS", hasSpanner ? C_BLUE : C_DIM);
+        }
+        drawText(b, 16 * ui, 14 * ui, 1.3f * ui, std::to_string((int)fps) + " FPS   RETAKES " + std::to_string(deaths), glm::vec4(1, 1, 1, 0.45f));
+        std::string tip = "TAB DIRECTOR MODE   HOLD TAB PEEK   R START MARK   ESC HOME";
+        drawText(b, w - textWidth(tip, 1.4f * ui) - 20 * ui, 14 * ui, 1.4f * ui, tip, C_DIM);
+        if (helpT > 0.0f) {
+            glm::vec4 hc(1, 1, 1, std::min(1.0f, helpT) * 0.9f);
+            drawTextCentered(b, cx, h * 0.2f, 1.7f * ui, "WASD MOVE   MOUSE LOOK   SPACE JUMP (CHAIN 3 JUMPS WHILE RUNNING)   SHIFT RUN", hc);
+            drawTextCentered(b, cx, h * 0.2f - 20 * ui, 1.7f * ui, "THE DARK IS AN EMPTY SET - TAB INTO DIRECTOR MODE AND BUILD THE SET WITH BLOCKS", hc);
+            drawTextCentered(b, cx, h * 0.2f - 40 * ui, 1.7f * ui, "GET EVERY COG, FILL THE WHOLE SET, THEN BLOW THE WHISTLE AT THE TOP", hc);
+        }
+    }
+    if (toastT > 0.0f && seq != SEQ_THE_END) drawTextCentered(b, cx, h * 0.72f, 2.0f * ui, toast, glm::vec4(1, 0.85f, 0.4f, std::min(1.0f, toastT)));
+    flushHUD(b, w, h);
+    drawCardHUD(w, h);
+}
+
+// ===================================================================
+// 입력
+// ===================================================================
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if (key == GLFW_KEY_F1 && action == GLFW_PRESS) { filmOn = !filmOn; return; }
+    if (mode == MODE_SCENE && key == GLFW_KEY_TAB) {
+        if (action == GLFW_PRESS && seq == SEQ_NONE && !transitioning && !stageClear) { tabHeld = true; tabDownTime = glfwGetTime(); }
+        else if (action == GLFW_RELEASE) {
+            if (peeking) peeking = false;
+            else if (tabHeld) beginDirector();
+            tabHeld = false;
+        }
+        return;
+    }
     if (action != GLFW_PRESS) return;
-    if (key == GLFW_KEY_F1) { filmOn = !filmOn; return; }
+    if (mode == MODE_HOME) {
+        if (seq == SEQ_MIRROR || seq == SEQ_SHELF) {
+            if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_E || key == GLFW_KEY_ENTER) seq = SEQ_NONE;
+            if (seq == SEQ_SHELF && !library.empty()) {
+                int n = (int)library.size();
+                if (key == GLFW_KEY_A || key == GLFW_KEY_LEFT) shelfIdx = (shelfIdx + n - 1) % n;
+                if (key == GLFW_KEY_D || key == GLFW_KEY_RIGHT) shelfIdx = (shelfIdx + 1) % n;
+            }
+            return;
+        }
+        if (seq != SEQ_NONE) return;
+        if (key == GLFW_KEY_ESCAPE) glfwSetWindowShouldClose(window, true);
+        else if (key == GLFW_KEY_E || key == GLFW_KEY_ENTER) activateHover();
+        return;
+    }
     if (mode == MODE_EDIT) {
         switch (key) {
         case GLFW_KEY_ESCAPE: case GLFW_KEY_TAB: case GLFW_KEY_ENTER: case GLFW_KEY_KP_ENTER: closeEdit(); break;
@@ -2482,15 +3040,30 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         }
         return;
     }
-    if (key == GLFW_KEY_ESCAPE) glfwSetWindowShouldClose(window, true);
-    else if (key == GLFW_KEY_TAB) openEdit();
-    else if (key == GLFW_KEY_R && !transitioning) { spawnAtStart(); lastSafe = SafeSpot{}; }
-    else if (key == GLFW_KEY_E && !transitioning) tryUnscrew();
-    else if ((key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) && stageClear) nextStage();
+    // 연기 모드
+    if (seq == SEQ_INTRO) { seqT = std::max(seqT, 3.8f); return; }
+    if (seq == SEQ_THE_END) { if (seqT > 1.2f && (key == GLFW_KEY_ENTER || key == GLFW_KEY_SPACE || key == GLFW_KEY_KP_ENTER)) returnHome(); return; }
+    if (seq != SEQ_NONE) return;
+    if (transitioning) { if (key == GLFW_KEY_SPACE || key == GLFW_KEY_ENTER || key == GLFW_KEY_E) trT = trTotal; return; }
+    if (key == GLFW_KEY_ESCAPE) enterHome();
+    else if (key == GLFW_KEY_R) { spawnAtStart(); lastSafe = SafeSpot{}; }
+    else if (key == GLFW_KEY_E) tryUnscrew();
 }
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    if (mode != MODE_EDIT) return;
+    if (mode == MODE_HOME) {
+        if (button != GLFW_MOUSE_BUTTON_LEFT || action != GLFW_PRESS) return;
+        if (seq == SEQ_MIRROR || seq == SEQ_SHELF) seq = SEQ_NONE;
+        else if (seq == SEQ_NONE) activateHover();
+        return;
+    }
+    if (mode == MODE_SCENE) {
+        if (button != GLFW_MOUSE_BUTTON_LEFT || action != GLFW_PRESS) return;
+        if (seq == SEQ_INTRO) seqT = std::max(seqT, 3.8f);
+        else if (seq == SEQ_THE_END && seqT > 1.2f) returnHome();
+        else if (transitioning) trT = trTotal;
+        return;
+    }
     double mx, my;
     glfwGetCursorPos(window, &mx, &my);
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
@@ -2519,13 +3092,15 @@ void cursor_callback(GLFWwindow* window, double x, double y) {
     lastMouseX = x;
     lastMouseY = y;
     if (fabs(dx) > 300.0 || fabs(dy) > 300.0) return;
+    bool free = (mode == MODE_HOME && seq == SEQ_NONE) || (mode == MODE_SCENE && (seq == SEQ_NONE || transitioning));
+    if (!free) return;
     camYaw += (float)dx * 0.0025f;
-    camPitch = glm::clamp(camPitch - (float)dy * 0.0025f, -1.3f, 1.0f);
+    camPitch = glm::clamp(camPitch - (float)dy * 0.0025f, mode == MODE_HOME ? -1.4f : -1.3f, mode == MODE_HOME ? 1.4f : 1.0f);
 }
 
 void scroll_callback(GLFWwindow* window, double xo, double yo) {
     if (mode == MODE_EDIT) asmZoom = glm::clamp(asmZoom * (1.0f - (float)yo * 0.08f), 0.45f, 2.2f);
-    else camDist = glm::clamp(camDist - (float)yo * 0.5f, 2.5f, 12.0f);
+    else if (mode == MODE_SCENE) camDist = glm::clamp(camDist - (float)yo * 0.5f, 2.5f, 12.0f);
 }
 
 // ===================================================================
@@ -2540,13 +3115,6 @@ void saveScreenshot(int w, int h, const std::string& path) {
     for (int y = h - 1; y >= 0; --y) out.write((const char*)&px[(size_t)y * w * 3], (std::streamsize)w * 3);
 }
 
-void teleport(glm::vec3 feet, float yaw, float pitch) {
-    pl.pos = feet;
-    pl.vel = glm::vec3(0.0f);
-    camYaw = yaw;
-    camPitch = pitch;
-}
-
 void collectAll() {
     for (auto& p : pickups) {
         if (p.taken) continue;
@@ -2556,106 +3124,90 @@ void collectAll() {
     }
 }
 
+void finishStageForTest() {
+    collectAll();
+    pl.pos = goalPos - glm::vec3(0, PLAYER_H * 0.5f, 0);
+    updatePlayer(0.0001f);
+    std::cout << "[test] cogs " << cogsTaken() << "/" << cogsTotal() << " full " << gridComplete() << " clear " << stageClear << "\n";
+}
+
+void lookAtHome(glm::vec3 p) {
+    glm::vec3 d = glm::normalize(p - (pl.pos + glm::vec3(0, 1.62f, 0)));
+    camYaw = atan2f(d.x, -d.z);
+    camPitch = asinf(d.y);
+}
+
 struct Step { int delay; std::function<bool()> fn; };
 std::vector<Step> script;
 size_t scriptIdx = 0;
-int scriptWait = 0;
-int shotW = 0, shotH = 0;
-
+int scriptWait = 0, shotW = 0, shotH = 0;
 void shot(const std::string& n) { saveScreenshot(shotW, shotH, "shot_" + n + ".ppm"); std::cout << "[shot] " << n << "\n"; }
 
 void stats() {
     int cells = 0, bad = 0, opt = 0;
     for (auto& p : pieces) { if (p.inSolution) cells += (int)p.cells.size(); else ++opt; if (!p.custom && p.cells.size() > 4) ++bad; }
-    std::cout << "[test] stage " << stage + 1 << " N " << N << " pieces " << pieces.size() << " (optional " << opt << ") solution cells " << cells << " + fixed 2 = " << cells + 2
-              << " / " << N * N * N << ", pieces>4: " << bad << ", cogs " << cogsTotal() << ", suspenders " << (int)pickups.size() - cogsTotal() << "\n";
+    std::cout << "[test] stage " << stage + 1 << " N " << N << " pieces " << pieces.size() << " (optional " << opt << ") cells " << cells + 2 << "/" << N * N * N
+              << " pieces>4: " << bad << " cogs " << cogsTotal() << " suspenders " << (int)pickups.size() - cogsTotal() << "\n";
 }
 
 void buildScript() {
     auto S = [](int d, std::function<bool()> f) { script.push_back({ d, f }); };
     auto waitTr = []() { return !transitioning; };
-    // 스테이지 1 (2x2x2)
-    S(3, [] { stats(); shot("a1_start_dark"); return true; });
-    S(1, [] { openEdit(); return true; });
-    S(3, [] { shot("a2_edit_empty"); autoSolve(); return true; });
-    S(3, [] { shot("a3_edit_solved"); closeEdit(); return true; });
-    S(20, [] { shot("a4_reassemble_mid"); return true; });
-    S(25, [] { shot("a5_reassemble_late"); return true; });
+    // 홈
+    S(5, [] { std::cout << "[test] home interacts " << interacts.size() << "\n"; shot("h1_home"); return true; });
+    S(1, [] { pl.pos = glm::vec3(-0.6f, 0.0f, -1.6f); lookAtHome(interacts[0].pos); return true; });
+    S(2, [] { updateHomeHover(); std::cout << "[test] hover " << (hoverInteract >= 0 ? interacts[hoverInteract].label : "none") << "\n"; shot("h2_board_hover"); return true; });
+    S(1, [] { seq = SEQ_MIRROR; return true; });
+    S(3, [] { shot("h3_mirror"); seq = SEQ_NONE; return true; });
+    S(1, [] { lookAtHome(interacts[0].pos); updateHomeHover(); activateHover(); return true; });
+    S(40, [] { shot("h4_pack"); return true; });
+    S(0, [] { return mode == MODE_SCENE && seq == SEQ_INTRO; });
+    S(50, [] { stats(); shot("s1_intro_set"); return true; });
+    S(70, [] { shot("s1_intro_goal"); return true; });
+    S(0, [] { return seq == SEQ_NONE; });
+    S(8, [] { shot("s1_action"); beginDirector(); return true; });
+    S(45, [] { shot("s1_crane_pickup"); return true; });
+    S(50, [] { shot("s1_crane_up"); return true; });
+    S(0, [] { return mode == MODE_EDIT; });
+    S(3, [] { shot("s1_director_mode"); autoSolve(); closeEdit(); return true; });
+    S(30, [] { shot("s1_reassemble"); return true; });
     S(0, waitTr);
-    S(30, [] { std::cout << "[test] after transition player " << pl.pos.x << "," << pl.pos.y << "," << pl.pos.z << " deaths " << deaths << "\n"; shot("a6_after"); return true; });
-    S(1, [] { teleport(cellWorldCenter(startCell) + glm::vec3(-2.0f, -HALF + SLAB, -2.0f), PI * 0.75f, 0.35f); return true; });
-    S(30, [] { shot("a7_look_up"); return true; });
-    S(1, [] { collectAll(); pl.pos = goalPos - glm::vec3(0, PLAYER_H * 0.5f, 0); updatePlayer(0.0001f);
-              std::cout << "[test] cogs " << cogsTaken() << "/" << cogsTotal() << " full " << gridComplete() << " clear " << stageClear << "\n"; clearT = 1.0f; return true; });
-    S(3, [] { shot("a8_clear"); nextStage(); stats(); return true; });
-    // 스테이지 2 (3x3x3, 다단블럭 필수)
-    S(30, [] { shot("b1_start_dark"); return true; });
-    S(1, [] { openEdit(); return true; });
-    S(3, [] { shot("b2_edit");
-              // 정답 조각 절반만 배치
-              int k = 0; for (auto& p : pieces) if (p.inSolution && k++ % 2 == 0) { p.rot = glm::mat3(1.0f); p.pos = p.solPos; p.placed = true; }
-              rebuildOcc(); return true; });
-    S(3, [] { shot("b3_edit_half"); closeEdit(); return true; });
-    S(30, [] { shot("b4_reassemble"); return true; });
+    S(10, [] { peeking = true; return true; });
+    S(30, [] { shot("s1_peek"); peeking = false; return true; });
+    S(30, [] { finishStageForTest(); return true; });
+    S(0, [] { return seq == SEQ_THE_END; });
+    S(80, [] { std::cout << "[test] poster " << (posterTex[0] != 0) << "\n"; shot("s1_the_end"); returnHome(); return true; });
+    S(10, [] { std::cout << "[test] progress " << progress << " library " << library.size() << "\n"; camYaw = PI; camPitch = 0.0f; return true; });
+    S(5, [] { shot("h5_poster_wall"); camYaw = -PI * 0.5f; camPitch = -0.1f; return true; });
+    S(5, [] { shot("h6_shelf"); seq = SEQ_SHELF; shelfIdx = 0; return true; });
+    S(5, [] { shot("h7_shelf_view"); seq = SEQ_NONE; return true; });
+    // 3x3x3: 다단블럭 필수
+    S(1, [] { startStage(1); startIntro(); seqT = 3.8f; stats(); return true; });
+    S(0, [] { return seq == SEQ_NONE; });
+    S(5, [] { beginDirector(); return true; });
+    S(0, [] { return mode == MODE_EDIT; });
+    S(3, [] { shot("s2_director_mode"); autoSolve(); closeEdit(); return true; });
     S(0, waitTr);
-    S(10, [] { // 어둠으로 걸어 들어가면 사망 → 직전 발판으로 복귀
-              int d0 = deaths; glm::vec3 safe = pl.pos;
-              for (int i = 0; i < N * N * N; ++i) if (occ[i] == OCC_EMPTY) { pl.pos = cellWorldCenter(cellOf(i)); break; }
-              updatePlayer(1.0f / 60.0f);
-              std::cout << "[test] void death " << (deaths - d0) << ", respawn " << pl.pos.x << "," << pl.pos.y << "," << pl.pos.z << " (was " << safe.x << "," << safe.y << "," << safe.z << ")\n";
-              return true; });
-    S(20, [] { shot("b5_half_scene"); return true; });
-    S(1, [] { // 서 있는 블럭을 편집 → 플레이어가 같이 실려 가는지
-              int target = -1;
-              for (int p = 0; p < (int)pieces.size(); ++p) if (pieces[p].placed && !pieces[p].custom && pieces[p].cells.size() == 1) target = p;
-              if (target < 0) for (int p = 0; p < (int)pieces.size(); ++p) if (pieces[p].placed && !pieces[p].custom) target = p;
-              if (target >= 0) {
-                  glm::vec3 c = cellWorldCenter(pieces[target].pos + shapeCells(pieces[target], pieces[target].rot)[0]);
-                  pl.pos = c + glm::vec3(0, -HALF + SLAB + 0.05f, 0) + glm::vec3(-4.0f, 0, 0);
-                  pl.vel = glm::vec3(0.0f);
-              }
-              openEdit();
-              autoSolve();
-              rebuildOcc();
-              // 같은 자리에 들어가는 다른 회전을 찾아서 돌린다
-              if (target >= 0)
-                  for (const auto& r : ROTS)
-                      if (r != pieces[target].rot && canPlace(pieces[target], r, pieces[target].pos, target)) { pieces[target].rot = r; break; }
-              rebuildOcc();
-              closeEdit();
-              std::cout << "[test] rider piece " << (riderPiece >= 0 ? trEvents[riderPiece].piece : -1) << " target " << target << "\n";
-              return true; });
-    S(25, [] { shot("b6_ride_mid"); return true; });
+    S(20, [] { shot("s2_scene"); finishStageForTest(); return true; });
+    S(0, [] { return seq == SEQ_THE_END; });
+    S(60, [] { returnHome(); return true; });
+    // 4x4x4: 다단블럭 선택
+    S(1, [] { startStage(2); startIntro(); seqT = 3.8f; stats(); return true; });
+    S(0, [] { return seq == SEQ_NONE; });
+    S(5, [] { beginDirector(); return true; });
+    S(0, [] { return mode == MODE_EDIT; });
+    S(3, [] { shot("s3_director_mode"); autoSolve(); closeEdit(); return true; });
     S(0, waitTr);
-    S(20, [] { std::cout << "[test] after ride player " << pl.pos.x << "," << pl.pos.y << "," << pl.pos.z << " deaths " << deaths << " full " << gridComplete() << "\n"; shot("b7_full_scene"); return true; });
-    S(1, [] { // 멜빵 → 스패너 → 다단블럭 패널 나사 4개
-              for (auto& p : pickups) if (p.type == 1) { pl.pos = p.pos - glm::vec3(0, PLAYER_H * 0.5f, 0); updatePlayer(0.0001f); }
-              std::cout << "[test] spanner " << hasSpanner << ", bolts " << bolts.size() << "\n";
-              if (!bolts.empty()) {
-                  int piece = bolts[0].piece, face = bolts[0].face;
-                  for (int k = 0; k < 4; ++k) {
-                      for (auto& b : bolts) if (b.piece == piece && b.face == face) { pl.pos = b.pos - glm::vec3(0, PLAYER_H * 0.5f, 0); break; }
-                      tryUnscrew();
-                  }
-                  std::cout << "[test] panel open " << (pieces[piece].bolts[face] == 15) << ", bolts left " << bolts.size() << "\n";
-                  glm::vec3 d = glm::round(pieces[piece].rot * glm::vec3(NB[face]));
-                  glm::vec3 c = pieceCenter(pieces[piece]);
-                  float h = pieces[piece].customSize * CS * 0.5f;
-                  glm::vec3 eye = c + d * (h + 4.0f);
-                  eye.y = std::max(eye.y, 1.0f);
-                  teleport(eye, atan2f(-d.x, d.z) + PI, -0.1f);
-              }
-              return true; });
-    S(30, [] { shot("b8_panel_open"); return true; });
-    S(1, [] { collectAll(); pl.pos = goalPos - glm::vec3(0, PLAYER_H * 0.5f, 0); updatePlayer(0.0001f);
-              std::cout << "[test] cogs " << cogsTaken() << "/" << cogsTotal() << " clear " << stageClear << "\n"; return true; });
-    S(3, [] { nextStage(); stats(); return true; });
-    S(30, [] { shot("c1_stage3_start"); openEdit(); return true; });
-    S(3, [] { shot("c2_stage3_edit"); autoSolve(); closeEdit(); return true; });
+    S(20, [] { shot("s3_scene"); beginDirector(); std::cout << "[test] second director entry long=" << seqLong << "\n"; return true; });
+    S(12, [] { shot("s3_quick_cut"); return true; });
+    S(0, [] { return mode == MODE_EDIT; });
+    S(2, [] { closeEdit(); return true; });
     S(0, waitTr);
-    S(20, [] { teleport(cellWorldCenter(startCell) + glm::vec3(0, -HALF + SLAB, 0), PI * 0.75f, 0.45f); return true; });
-    S(30, [] { shot("c3_stage3_scene"); return true; });
-    S(1, [] { glfwSetWindowShouldClose(gWindow, true); return true; });
+    S(5, [] { finishStageForTest(); return true; });
+    S(0, [] { return seq == SEQ_THE_END; });
+    S(60, [] { returnHome(); return true; });
+    S(5, [] { camYaw = PI; camPitch = 0.0f; return true; });
+    S(5, [] { shot("h8_all_posters"); std::cout << "[test] progress " << progress << " library " << library.size() << "\n"; glfwSetWindowShouldClose(gWindow, true); return true; });
 }
 
 void runScript(int w, int h) {
@@ -2675,7 +3227,7 @@ int main(int argc, char** argv) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    GLFWwindow* window = glfwCreateWindow(1280, 720, "Prototype - Scene Assembly Platformer", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(1280, 720, "Prototype - Director's Cut", nullptr, nullptr);
     if (!window) { glfwTerminate(); return -1; }
     gWindow = window;
     glfwMakeContextCurrent(window);
@@ -2696,7 +3248,8 @@ int main(int argc, char** argv) {
     compositeProg = makeProgram("post_vertex.glsl", "composite_fragment.glsl");
     hudProg = makeProgram("hud_vertex.glsl", "hud_fragment.glsl");
     cubeProg = makeProgram("cube_vertex.glsl", "cube_fragment.glsl");
-    if (!sceneProg || !shadowProg || !skyProg || !brightProg || !blurProg || !compositeProg || !hudProg || !cubeProg) {
+    posterProg = makeProgram("poster_vertex.glsl", "poster_fragment.glsl");
+    if (!sceneProg || !shadowProg || !skyProg || !brightProg || !blurProg || !compositeProg || !hudProg || !cubeProg || !posterProg) {
         glfwDestroyWindow(window);
         glfwTerminate();
         return -1;
@@ -2724,15 +3277,26 @@ int main(int argc, char** argv) {
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(2 * sizeof(float)));
     glEnableVertexAttribArray(1);
+    // 포스터용 사각형 (위치 + UV)
+    float quad[] = { -0.5f, -0.5f, 0, 0, 0,  0.5f, -0.5f, 0, 1, 0,  0.5f, 0.5f, 0, 1, 1,  -0.5f, -0.5f, 0, 0, 0,  0.5f, 0.5f, 0, 1, 1,  -0.5f, 0.5f, 0, 0, 1 };
+    glGenVertexArrays(1, &posterVao);
+    glGenBuffers(1, &posterVbo);
+    glBindVertexArray(posterVao);
+    glBindBuffer(GL_ARRAY_BUFFER, posterVbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
     glBindVertexArray(0);
     createShadowMap();
 
     initRotations();
     initThemes();
-    stage = 0;
-    startStage();
+    N = 2;
+    rebuildOcc();
+    enterHome();
     if (shotMode) {
-        // 오르막 경로 점검: 발판 사이 오름 높이와 가장자리 간격 (점프 2.3 / 2단 3.1)
         for (int t = 0; t < 10; ++t) {
             const auto& R = ROUTE[t];
             if (R.empty()) continue;
@@ -2747,11 +3311,10 @@ int main(int argc, char** argv) {
         buildScript();
     }
 
-    std::cout << "=== Prototype v2 : 씬 조립 플랫포머 ===\n"
-              << "[씬]   WASD 이동, 마우스 시점, Space 점프 (달리며 연속 3단), Shift 달리기\n"
-              << "       사다리 W/S, 증기 승강기 Space/Ctrl, E 나사 풀기, Tab 편집, R 시작 칸으로\n"
-              << "[편집] 좌클릭 배치, 우클릭 회수, 우드래그 시점, 휠 확대, Q/E W/S A/D 회전(24방향)\n"
-              << "       Z/X 또는 1~9 선택, Backspace 전부 회수, Tab/Enter 씬으로 (재배치 연출)\n"
+    std::cout << "=== Prototype 3 : Director's Cut ===\n"
+              << "[찰리의 방] WASD 이동, 마우스 시점, 클릭/E 사용 (스케줄 보드, 거울, 필름 선반)\n"
+              << "[연기 모드] WASD 이동, Space 점프 (달리며 연속 3단), Tab 짧게 = 감독 모드, Tab 누르고 있기 = 엿보기, Esc 홈\n"
+              << "[감독 모드] 좌클릭 배치, 우클릭 회수, 우드래그 시점, 휠 확대, Q/E W/S A/D 회전, Tab/Enter = 액션!\n"
               << "F1 필름 효과\n";
 
     double lastTime = glfwGetTime();
@@ -2770,22 +3333,32 @@ int main(int argc, char** argv) {
         globalTime += dt;
         toastT -= dt;
 
-        if (mode == MODE_SCENE) {
+        if (mode == MODE_HOME) {
+            if (seq == SEQ_NONE) { updatePlayer(dt); updateHomeHover(); }
+        } else if (mode == MODE_SCENE) {
             helpT -= dt;
             if (stageClear) clearT += dt;
+            if (stageClear && seq != SEQ_THE_END) { seq = SEQ_THE_END; seqT = 0.0f; peeking = false; }
             if (transitioning) updateTransition(dt);
-            else {
+            else if (seq == SEQ_NONE && !peeking && peekBlend < 0.3f) {
                 camDistBoost = std::max(0.0f, camDistBoost - dt * 4.0f);
                 if (!stageClear) updatePlayer(dt);
             }
             updateEffects(dt);
         }
+        updateSequences(dt);
 
         int w, h;
         glfwGetFramebufferSize(window, &w, &h);
         if (w > 0 && h > 0) {
             if (mode == MODE_EDIT) { renderEdit(w, h); renderEditHUD(w, h); }
-            else { renderWorld(w, h); renderSceneHUD(w, h); }
+            else if (mode == MODE_HOME && seq == SEQ_SHELF) { renderShelfView(w, h); renderHomeHUD(w, h); }
+            else {
+                renderWorld(w, h);
+                if (capturePosterNow && mode == MODE_SCENE) capturePoster(w, h);
+                if (mode == MODE_HOME) renderHomeHUD(w, h);
+                else renderSceneHUD(w, h);
+            }
             if (shotMode) runScript(w, h);
         }
         glfwSwapBuffers(window);

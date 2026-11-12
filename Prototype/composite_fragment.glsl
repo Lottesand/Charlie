@@ -9,6 +9,7 @@ uniform vec2 texel;
 uniform float film;      // 0~1 무성영화 필름 느낌 (세피아 + 깜빡임 + 스크래치)
 uniform float flash;     // 0~1 톱니 획득 등 화면 번쩍임
 uniform float time;
+uniform float fade;      // 0~1 암전
 
 vec4 S(vec2 o) { return texture(normalTex, uv + o * texel); }
 
@@ -59,5 +60,6 @@ void main()
     col += vec3(1.0, 0.85, 0.4) * flash * 0.35;
 
     col += (hash(uv * 900.0 + time) - 0.5) * (0.025 + 0.04 * film);
+    col *= 1.0 - fade;
     FragColor = vec4(pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
 }

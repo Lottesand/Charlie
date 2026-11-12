@@ -1872,6 +1872,11 @@ float fadeAmt = 0.0f;                   // 화면 암전 (0~1)
 struct WorkerPose { bool on = false; glm::vec3 pos = glm::vec3(0.0f); float yaw = 0.0f; bool seated = false; } wOverride;
 bool craneActive = false;
 glm::vec3 craneTip(0.0f);
+bool studioOnly = false;                // 감독 모드 배경: 세트(블럭 내용물, 외벽, 아이템)는 빼고 스튜디오 소품만
+bool projOv = false;                    // 감독 모드 배경: 조립 화면과 같은 투영을 쓴다
+glm::mat4 projOvMat(1.0f);
+bool craneArmOv = false;                // 감독 모드: 크레인 팔이 카메라 뒤 위쪽에서 내려온다
+glm::vec3 craneArmDir(0, 1, 0);
 const glm::vec3 CAN_DESK(0.8f, 0.98f, -3.25f);
 glm::vec3 canPos = CAN_DESK;
 GLuint posterProg = 0, posterVao = 0, posterVbo = 0;
@@ -1891,6 +1896,15 @@ void drawCrane() {
     Material iron = mat(glm::vec3(0.18f, 0.18f, 0.2f), 0.6f, 32.0f), red = mat(glm::vec3(0.7f, 0.15f, 0.12f), 0.4f, 24.0f), canvas = mat(glm::vec3(0.75f, 0.68f, 0.5f), 0.1f, 8.0f);
     glm::vec3 base = craneBasePos(), top = base + glm::vec3(0, N * CS + 12.0f, 0);
     glm::vec3 tip = craneActive ? craneTip : craneRestTip();
+    if (craneArmOv) {
+        drawBeam(tip, tip + craneArmDir * 40.0f, 0.7f, red);
+        glm::vec3 seat = tip - glm::vec3(0, 2.2f, 0);
+        drawBeam(tip, seat + glm::vec3(0, 0.6f, 0), 0.06f, iron);
+        drawMesh(cubeMesh, TRS(seat, glm::vec3(0.9f, 0.1f, 0.9f)), canvas);
+        drawMesh(cubeMesh, TRS(seat + glm::vec3(0, 0.45f, -0.42f), glm::vec3(0.9f, 0.8f, 0.06f)), canvas);
+        for (int s = -1; s <= 1; s += 2) drawMesh(cubeMesh, TRS(seat + glm::vec3(0.45f * s, 0.25f, 0), glm::vec3(0.06f, 0.5f, 0.9f)), iron);
+        return;
+    }
     drawMesh(cubeMesh, TRS(base + glm::vec3(0, 0.6f, 0), glm::vec3(4.0f, 1.2f, 4.0f)), iron);
     drawBeam(base, top, 1.0f, red);
     drawBeam(top, tip, 0.7f, red);
@@ -1999,16 +2013,18 @@ void updateFades(glm::vec3 target, glm::vec3 cam) {
 void drawWorld(bool withEffects) {
     auto chunkMat = [](int c) { return c >= 0 && c < (int)chunkM.size() ? chunkM[c] : glm::mat4(1.0f); };
     bool anim = transitioning;
-    bool fadeOk = !shadowPass && boxFade.size() == boxes.size() && decoFade.size() == decos.size();
+    bool fadeOk = !studioOnly && !shadowPass && boxFade.size() == boxes.size() && decoFade.size() == decos.size();
     for (size_t i = 0; i < boxes.size(); ++i) {
         const Box& b = boxes[i];
         if (!b.visible) continue;
+        if (studioOnly && (b.chunk >= 0 || (i >= 1 && i <= 4))) continue;     // 블럭 내용물 + 세트 외벽 4면
         if (shadowPass && b.mat.emissive > 0.3f) continue;
         if (fadeOk && boxFade[i] < 0.98f) continue;     // 반투명 오브젝트는 맨 마지막에
         drawMesh(cubeMesh, anim ? chunkMat(b.chunk) * TRS(b.center, b.size) : TRS(b.center, b.size), b.mat);
     }
     for (size_t i = 0; i < decos.size(); ++i) {
         const Deco& d = decos[i];
+        if (studioOnly && d.chunk >= 0) continue;
         if (shadowPass && (d.mat.emissive > 0.3f || d.size.x < 0.3f)) continue;
         if (fadeOk && decoFade[i] < 0.98f) continue;
         drawDeco(d, anim ? chunkMat(d.chunk) : glm::mat4(1.0f));
@@ -2017,14 +2033,14 @@ void drawWorld(bool withEffects) {
         for (const auto& b : ghostBoxes) if (b.visible) drawMesh(cubeMesh, ghostM[b.chunk] * TRS(b.center, b.size), b.mat);
         for (const auto& d : ghostDecos) drawDeco(d, ghostM[d.chunk]);
     }
-    if (!inHome) for (const auto& p : pickups) if (!p.taken) drawPickupModel(p, withEffects);
+    if (!inHome && !studioOnly) for (const auto& p : pickups) if (!p.taken) drawPickupModel(p, withEffects);
     if (!inHome || wOverride.on) drawWorker();
     if (!inHome) drawCrane();
     else {
         drawMesh(cylMesh, TRS(canPos, glm::vec3(0.5f, 0.12f, 0.5f)), mat(glm::vec3(0.7f, 0.72f, 0.75f), 1.0f, 64.0f));
         drawMesh(cylMesh, TRS(canPos + glm::vec3(0, 0.065f, 0), glm::vec3(0.2f, 0.02f, 0.2f)), mat(glm::vec3(0.7f, 0.2f, 0.15f), 0, 1, 0.4f));
     }
-    if (!withEffects) return;
+    if (!withEffects || studioOnly) return;
     // 빈 칸은 비워 둔다: 어둠 너머 다른 블럭 안이 그대로 보인다 (들어가면 사망)
     Material steam = mat(glm::vec3(0.86f, 0.84f, 0.8f), 0.0f, 1.0f, 0.15f);
     for (const auto& p : puffs) drawMesh(cubeMesh, TRS(p.pos, glm::vec3(p.size * std::min(1.0f, p.life))), steam);
@@ -2106,7 +2122,7 @@ void renderWorld(int w, int h) {
     if (inHome) clearFades();
     else updateFades(focus, desired);
     glm::mat4 view = glm::lookAt(desired, desired + fwd, glm::vec3(0, 1, 0));
-    glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)w / (float)h, 0.05f, FAR_PLANE);
+    glm::mat4 proj = projOv ? projOvMat : glm::perspective(glm::radians(70.0f), (float)w / (float)h, 0.05f, FAR_PLANE);
     glm::vec3 center = inHome ? glm::vec3(0, 1.7f, 0) : glm::vec3(0, N * CS * 0.5f, 0);
     float ext = inHome ? 8.0f : N * CS * 0.85f + 14.0f;
     glm::mat4 lightVP = glm::ortho(-ext, ext, -ext, ext, 60.0f, 340.0f) * glm::lookAt(center + SUN_DIR * 200.0f, center, glm::vec3(0, 1, 0));
@@ -2456,10 +2472,50 @@ void drawMiniCharlie(glm::vec3 base, float s, float yaw, bool seated, float glow
 void renderEdit(int w, int h) {
     layoutSlots(w, h);
     updateHover(w, h);
+    // 배경: 실제 스튜디오(세트, 외벽, 조명 탑, 바닥)를 감독 시점과 같은 방향에서 조금 멀리, 어둡게 깔아 둔다
+    {
+        bool svOv = camOv;
+        float svFade = fadeAmt;
+        glm::vec3 c(0, N * CS * 0.5f, 0), eye = c + asmEyeDir() * ((N * 2.1f + 2.6f) * asmZoom * CS);
+        camOv = true;
+        camOvPos = eye;
+        camOvFwd = glm::normalize(c - eye);
+        camOvFocus = c;
+        // 크레인 의자에 앉은 찰리가 카메라 앞 왼쪽 아래에서 세트를 내려다본다 (뒷모습)
+        WorkerPose svPose = wOverride;
+        bool svCrane = craneActive;
+        glm::vec3 svTip = craneTip;
+        glm::vec3 right = glm::normalize(glm::cross(camOvFwd, glm::vec3(0, 1, 0))), up = glm::cross(right, camOvFwd);
+        glm::vec3 seat = eye + camOvFwd * 12.0f - right * 4.8f - up * 2.0f;
+        {
+            float panel = glm::clamp(panelTop / (float)std::max(h, 1), 0.0f, 0.45f);
+            glm::mat4 shift = glm::translate(glm::mat4(1.0f), glm::vec3(0, panel, 0)) * glm::scale(glm::mat4(1.0f), glm::vec3(1.0f - panel * 0.6f, 1.0f - panel * 0.6f, 1.0f));
+            projOvMat = shift * glm::perspective(glm::radians(36.0f), (float)w / (float)std::max(h, 1), 0.5f, FAR_PLANE);
+        }
+        projOv = true;
+        studioOnly = true;
+        craneActive = true;
+        craneArmOv = true;
+        craneArmDir = glm::normalize(-camOvFwd * 0.7f + glm::vec3(0, 1, 0) - right * 0.5f);
+        craneTip = seat + glm::vec3(0, 2.2f, 0);
+        wOverride.on = true;
+        wOverride.seated = true;
+        wOverride.pos = seat - glm::vec3(0, 0.45f, 0);
+        wOverride.yaw = atan2f(camOvFwd.x, camOvFwd.z);
+        fadeAmt = 0.15f;
+        renderWorld(w, h);
+        projOv = false;
+        studioOnly = false;
+        camOv = svOv;
+        fadeAmt = svFade;
+        wOverride = svPose;
+        craneActive = svCrane;
+        craneArmOv = false;
+        craneTip = svTip;
+    }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, w, h);
-    glClearColor(0.06f, 0.055f, 0.05f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
     glUseProgram(cubeProg);
     cubeVP = asmVP(w, h);

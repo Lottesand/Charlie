@@ -1,0 +1,15 @@
+# Visual Studio
+.vs/
+x64/
+Debug/
+Release/
+*.user
+*.obj
+*.pdb
+*.ilk
+*.tlog
+*.idb
+*.log
+
+# 셀프 테스트 스크린샷
+shot_*.ppm

@@ -36,7 +36,7 @@ const float PI = 3.1415926535f;
 const float FAR_PLANE = 260.0f;
 const int SHADOW_SIZE = 2048;
 
-const float CS = 12.0f;             // 블럭 하나의 월드 크기
+const float CS = 30.0f;             // 블럭 하나의 월드 크기 (캐릭터/발판 크기는 그대로, 맵만 2.5배)
 const float HALF = CS * 0.5f;
 const float SLAB = 0.4f;            // 블럭 바닥 두께 (높이 h 는 블럭 밑면에서 잰다)
 
@@ -211,32 +211,102 @@ bool isUpright(const glm::mat3& R) { return (R * glm::vec3(0, 1, 0)).y > 0.5f; }
 
 // ===================================================================
 // 블럭 컨셉 + 발판 구성
-//   블럭 바닥은 4x4 타일 3x3 장. fl[tz][tx] 가 'X' 면 바닥이 있고 '.' 이면 구멍 (아래 블럭으로 떨어지거나, 아래에서 올라오는 통로)
-//   ex, ez : 블럭 안의 오르막(계단/사다리/승강기/발판)이 끝나는 타일. 바로 위 블럭의 그 자리에 구멍이 있어야 위층으로 올라간다
-//   anchors : 톱니를 띄울 수 있는 자리 (x, h, z)
+//   블럭 바닥은 10x10 타일 3x3 장. fl[tz][tx] 가 'X' 면 바닥이 있고 '.' 이면 구멍 (아래 블럭으로 떨어지거나, 아래에서 올라오는 통로)
+//   블럭마다 바닥에서 천장(높이 30)까지 이어지는 오르막(발판 경로/사다리/승강기/튕김 발판)이 있다
+//   오르막이 끝나는 타일 바로 위 블럭의 그 자리에 구멍이 있어야 위층으로 올라간다
 // ===================================================================
 struct Theme {
     const char* name;
     glm::vec3 color, floor, accent;
     const char* fl[3];
-    int ex, ez;
-    std::vector<glm::vec3> anchors;
 };
 
 enum { TH_GEAR, TH_CONVEYOR, TH_PRESS, TH_BOILER, TH_BENCH, TH_SUPERVISOR, TH_FEEDING, TH_CLOCK, TH_START, TH_END };
 const int THEME_COUNT = 8;
 const Theme THEMES[10] = {
-    { "GEAR WORKS",       { 0.78f, 0.58f, 0.26f }, { 0.44f, 0.38f, 0.31f }, { 0.95f, 0.75f, 0.3f },  { "XXX", "XX.", "XXX" }, 2, 0, { { 4.5f, 9.8f, 0 }, { 0, 5.8f, 4.5f } } },
-    { "CONVEYOR LINE",    { 0.34f, 0.56f, 0.64f }, { 0.36f, 0.39f, 0.41f }, { 0.95f, 0.82f, 0.2f },  { "XX.", "XXX", "XXX" }, 0, 2, { { -2.5f, 9.8f, 4.5f }, { 0, 2.4f, 0 } } },
-    { "PRESS SHOP",       { 0.78f, 0.3f, 0.22f },  { 0.42f, 0.35f, 0.32f }, { 1.0f, 0.78f, 0.1f },  { "XXX", "X.X", "XXX" }, 2, 1, { { 0, 9.8f, -4 }, { -4, 4.8f, 4 } } },
-    { "BOILER ROOM",      { 0.58f, 0.34f, 0.2f },  { 0.32f, 0.27f, 0.25f }, { 1.0f, 0.45f, 0.15f }, { "XXX", "X.X", "XXX" }, 1, 1, { { 4, 7.8f, 4 }, { -4, 6.8f, -4 } } },
-    { "WORKBENCH",        { 0.42f, 0.54f, 0.3f },  { 0.47f, 0.41f, 0.33f }, { 0.92f, 0.9f, 0.72f },  { "XXX", "XXX", ".XX" }, 2, 0, { { -4, 5.8f, -4 }, { 2, 1.6f, 4 } } },
-    { "SUPERVISOR",       { 0.32f, 0.38f, 0.6f },  { 0.38f, 0.31f, 0.28f }, { 0.55f, 0.92f, 1.0f },  { "XXX", "XXX", "..." }, 1, 2, { { 4.75f, 7.8f, -1 }, { -4, 1.8f, 0 } } },
-    { "FEEDING MACHINE",  { 0.68f, 0.64f, 0.56f }, { 0.42f, 0.4f, 0.37f },  { 0.98f, 0.92f, 0.5f },  { "XXX", "XXX", "XX." }, 1, 2, { { -3, 6.6f, -0.3f }, { 4, 4.8f, -4 } } },
-    { "TIME CLOCK",       { 0.56f, 0.42f, 0.64f }, { 0.4f, 0.35f, 0.4f },   { 1.0f, 0.95f, 0.8f },   { ".XX", "XXX", "XXX" }, 2, 2, { { 5, 7.8f, 0 }, { -4, 1.8f, 4 } } },
-    { "PUNCH-IN GATE",    { 0.35f, 0.72f, 0.42f }, { 0.4f, 0.42f, 0.36f },  { 0.6f, 1.0f, 0.6f },    { "XXX", "XXX", "XXX" }, 2, 2, {} },
-    { "QUITTING WHISTLE", { 0.95f, 0.85f, 0.6f },  { 0.45f, 0.42f, 0.36f }, { 1.0f, 0.9f, 0.5f },    { "XXX", "X.X", "XXX" }, -1, -1, {} },
+    { "GEAR WORKS",       { 0.78f, 0.58f, 0.26f }, { 0.44f, 0.38f, 0.31f }, { 0.95f, 0.75f, 0.3f },  { "XXX", "XX.", "XXX" } },
+    { "CONVEYOR LINE",    { 0.34f, 0.56f, 0.64f }, { 0.36f, 0.39f, 0.41f }, { 0.95f, 0.82f, 0.2f },  { "XXX", "XXX", "XX." } },
+    { "PRESS SHOP",       { 0.78f, 0.3f, 0.22f },  { 0.42f, 0.35f, 0.32f }, { 1.0f, 0.78f, 0.1f },  { "XXX", "X.X", "XXX" } },
+    { "BOILER ROOM",      { 0.58f, 0.34f, 0.2f },  { 0.32f, 0.27f, 0.25f }, { 1.0f, 0.45f, 0.15f }, { "XXX", "X.X", "XXX" } },
+    { "WORKBENCH",        { 0.42f, 0.54f, 0.3f },  { 0.47f, 0.41f, 0.33f }, { 0.92f, 0.9f, 0.72f },  { "XXX", "XXX", ".XX" } },
+    { "SUPERVISOR",       { 0.32f, 0.38f, 0.6f },  { 0.38f, 0.31f, 0.28f }, { 0.55f, 0.92f, 1.0f },  { "...", "XXX", "XXX" } },
+    { "FEEDING MACHINE",  { 0.68f, 0.64f, 0.56f }, { 0.42f, 0.4f, 0.37f },  { 0.98f, 0.92f, 0.5f },  { "XXX", "XXX", "XX." } },
+    { "TIME CLOCK",       { 0.56f, 0.42f, 0.64f }, { 0.4f, 0.35f, 0.4f },   { 1.0f, 0.95f, 0.8f },   { ".XX", "XXX", "XXX" } },
+    { "PUNCH-IN GATE",    { 0.35f, 0.72f, 0.42f }, { 0.4f, 0.42f, 0.36f },  { 0.6f, 1.0f, 0.6f },    { "XXX", "XXX", "XXX" } },
+    { "QUITTING WHISTLE", { 0.95f, 0.85f, 0.6f },  { 0.45f, 0.42f, 0.36f }, { 1.0f, 0.9f, 0.5f },    { "XXX", "X.X", "XXX" } },
 };
+
+const float TILE = CS / 3.0f;
+const float EXIT_H = CS - 1.8f;     // 오르막 꼭대기 발판 높이: 한 번 점프로 위 블럭 바닥(30.4)에 올라선다
+
+// 발판 경로: 블럭 가운데를 도는 사각 둘레를 따라 일정 간격으로 놓고 높이를 조금씩 올린다
+struct RStep { float x, z, h; };
+struct RouteSpec { float r, u0; int dir; float s, rise, rise2, h0; int skip; };
+std::vector<RStep> squareRoute(const RouteSpec& sp) {
+    std::vector<RStep> v;
+    float per = 8.0f * sp.r, h = sp.h0;
+    for (int i = 0;; ++i) {
+        float u = fmodf(sp.u0 + sp.dir * (i + sp.skip) * sp.s, per);
+        if (u < 0.0f) u += per;
+        int side = (int)(u / (2.0f * sp.r));
+        float t = u - side * 2.0f * sp.r, x, z;
+        if (side == 0) { x = -sp.r + t; z = -sp.r; }
+        else if (side == 1) { x = sp.r; z = -sp.r + t; }
+        else if (side == 2) { x = sp.r - t; z = sp.r; }
+        else { x = -sp.r; z = sp.r - t; }
+        bool last = h >= EXIT_H - 0.01f;
+        if (last) h = EXIT_H;
+        v.push_back({ x, z, h });
+        if (last) break;
+        h = std::min(EXIT_H, h + ((sp.rise2 > 0.0f && i % 2 == 1) ? sp.rise2 : sp.rise));
+    }
+    return v;
+}
+
+std::vector<RStep> ROUTE[10];           // 컨셉별 발판 경로
+int EXIT_T[10][2];                      // 오르막이 끝나는 타일 (-1 이면 없음)
+std::vector<glm::vec3> ANCHOR[10];      // 톱니를 띄울 자리 (x, h, z)
+const glm::vec2 LADDER_XZ(10.0f, -CS * 0.5f + 1.4f);
+const glm::vec2 PAD0_XZ(-8.0f, -8.0f);
+
+int tileOf(float v) { return glm::clamp((int)lroundf((v + TILE) / TILE), 0, 2); }
+
+void initThemes() {
+    // r, u0, dir, 간격, 오름, 교대 오름(2단 점프), 시작 높이, 건너뛰기
+    RouteSpec spec[10] = {};
+    spec[TH_GEAR] = { 10.0f, 0.0f, 1, 3.8f, 2.0f, 0.0f, 2.4f, 0 };
+    spec[TH_CONVEYOR] = { 10.0f, 20.0f, 1, 3.6f, 2.0f, 0.0f, 2.4f, 0 };
+    spec[TH_PRESS] = { 9.0f, 36.0f, -1, 4.0f, 2.0f, 3.0f, 2.4f, 0 };
+    spec[TH_SUPERVISOR] = { 11.0f, 66.0f, 1, 3.4f, 2.0f, 0.0f, 2.4f, 0 };
+    spec[TH_FEEDING] = { 8.0f, 0.0f, 1, 5.0f, 5.5f, 0.0f, 6.4f, 1 };
+    spec[TH_CLOCK] = { 11.0f, 22.0f, -1, 3.4f, 2.0f, 0.0f, 2.4f, 0 };
+    spec[TH_START] = { 10.0f, 20.0f, 1, 3.6f, 2.0f, 0.0f, 2.4f, 0 };
+    for (int t = 0; t < 10; ++t) {
+        ROUTE[t].clear();
+        ANCHOR[t].clear();
+        EXIT_T[t][0] = EXIT_T[t][1] = -1;
+        if (spec[t].r > 0.0f) {
+            ROUTE[t] = squareRoute(spec[t]);
+            const RStep& e = ROUTE[t].back();
+            EXIT_T[t][0] = tileOf(e.x);
+            EXIT_T[t][1] = tileOf(e.z);
+            if (t == TH_START) continue;
+            size_t n = ROUTE[t].size();
+            for (size_t k : { n / 3, (2 * n) / 3 }) {
+                const RStep& r = ROUTE[t][k];
+                float off = t == TH_FEEDING ? -0.7f : 0.0f;
+                ANCHOR[t].push_back({ r.x + off, r.h + 1.4f, r.z + off });
+            }
+        }
+    }
+    // 보일러: 가운데 증기 승강기 (+ 높이 10, 20 의 둘레 발판)
+    EXIT_T[TH_BOILER][0] = EXIT_T[TH_BOILER][1] = 1;
+    ANCHOR[TH_BOILER] = { { 5.0f, 11.8f, 0.0f }, { 0.0f, 21.8f, -5.0f } };
+    // 작업대: 한쪽 가장자리 사다리 (+ 쉼터 발판)
+    EXIT_T[TH_BENCH][0] = tileOf(LADDER_XZ.x);
+    EXIT_T[TH_BENCH][1] = tileOf(LADDER_XZ.y);
+    ANCHOR[TH_BENCH] = { { LADDER_XZ.x + 2.6f, 11.8f, LADDER_XZ.y + 1.6f }, { LADDER_XZ.x + 2.6f, 21.8f, LADDER_XZ.y + 1.6f } };
+}
 
 // ===================================================================
 // 블럭 / 단블럭 / 다단블럭
@@ -342,17 +412,15 @@ glm::mat4 pieceXform(const Piece& p) { return glm::translate(glm::mat4(1.0f), pi
 struct Abs { int theme = -1; glm::mat3 R = glm::mat3(1.0f); bool walk = false; };
 
 bool absSolid(const Abs& a, int wtx, int wtz) {
-    glm::vec3 l = glm::transpose(a.R) * glm::vec3(-4.0f + 4.0f * wtx, 0.0f, -4.0f + 4.0f * wtz);
-    int tx = (int)lroundf((l.x + 4.0f) / 4.0f), tz = (int)lroundf((l.z + 4.0f) / 4.0f);
-    return THEMES[a.theme].fl[tz][tx] == 'X';
+    glm::vec3 l = glm::transpose(a.R) * glm::vec3(-TILE + TILE * wtx, 0.0f, -TILE + TILE * wtz);
+    return THEMES[a.theme].fl[tileOf(l.z)][tileOf(l.x)] == 'X';
 }
 
 bool absExit(const Abs& a, int& wtx, int& wtz) {
-    const Theme& t = THEMES[a.theme];
-    if (t.ex < 0) return false;
-    glm::vec3 w = a.R * glm::vec3(-4.0f + 4.0f * t.ex, 0.0f, -4.0f + 4.0f * t.ez);
-    wtx = (int)lroundf((w.x + 4.0f) / 4.0f);
-    wtz = (int)lroundf((w.z + 4.0f) / 4.0f);
+    if (EXIT_T[a.theme][0] < 0) return false;
+    glm::vec3 w = a.R * glm::vec3(-TILE + TILE * EXIT_T[a.theme][0], 0.0f, -TILE + TILE * EXIT_T[a.theme][1]);
+    wtx = tileOf(w.x);
+    wtz = tileOf(w.z);
     return true;
 }
 
@@ -491,7 +559,7 @@ void generateStage() {
         if (!reach[idxOf(endCell)]) continue;
         std::vector<int> cc;
         for (int i = 0; i < total; ++i)
-            if (reach[i] && !isFixed(cellOf(i)) && A[i].walk && !THEMES[A[i].theme].anchors.empty()) cc.push_back(i);
+            if (reach[i] && !isFixed(cellOf(i)) && A[i].walk && !ANCHOR[A[i].theme].empty()) cc.push_back(i);
         if ((int)cc.size() < itemsWanted + extra) continue;
         chosen = ps;
         cand = cc;
@@ -504,7 +572,7 @@ void generateStage() {
     std::shuffle(cand.begin(), cand.end(), rng);
     for (int k = 0; k < itemsWanted + extra && k < (int)cand.size(); ++k) {
         const Abs& a = chosenA[cand[k]];
-        const auto& an = THEMES[a.theme].anchors;
+        const auto& an = ANCHOR[a.theme];
         glm::vec3 l = an[irand(0, (int)an.size() - 1)];
         glm::vec3 w = cellWorldCenter(cellOf(cand[k])) + a.R * glm::vec3(l.x, -HALF + l.y, l.z);
         pickups.push_back({ w, k < itemsWanted ? 0 : 1, false });
@@ -631,47 +699,95 @@ struct CellBuilder {
     }
 };
 
-// ---------------- 컨셉별 맵 (발판 높이는 점프 2.3 / 2단 3.1 / 3단 4.2 기준) ----------------
+// ---------------- 컨셉별 맵 (블럭 30 x 30 x 30, 발판/기믹 크기는 그대로) ----------------
+// 경로 발판: 떠 있는 발판 + 바닥까지 내려가는 지지대
+void routePlat(CellBuilder& b, const RStep& r, float size, const Material& top, const Material& pole, float thick = 0.5f) {
+    b.plat(r.x, r.z, size, size, r.h, top, thick);
+    b.deco(D_STATIC, at(CellBuilder::L(r.x, (SLAB + r.h - thick) * 0.5f, r.z)), glm::vec3(0.22f, r.h - thick - SLAB, 0.22f), 1, pole);
+}
+
+// 바닥 장애물: 상자 더미 / 드럼통 / 눕힌 파이프 (맵이 커진 만큼 바닥이 비지 않게)
+// 가운데 승강기 자리, 구멍 타일, 경로 첫 발판 근처는 피한다
+void addClutter(CellBuilder& b, int theme, std::mt19937& r, int count) {
+    auto rnd = [&](float a, float c) { std::uniform_real_distribution<float> d(a, c); return d(r); };
+    const Theme& t = THEMES[theme];
+    Material crate = mat(glm::vec3(0.62f, 0.45f, 0.28f), 0.1f, 8.0f, 0.0f, 2), drum = mat(t.color * 0.75f, 0.6f, 32.0f), pipe = mat(glm::vec3(0.5f, 0.42f, 0.32f), 0.8f, 48.0f);
+    int placed = 0;
+    for (int tries = 0; tries < count * 10 && placed < count; ++tries) {
+        float x = rnd(-12.5f, 12.5f), z = rnd(-12.5f, 12.5f);
+        if (fabsf(x) < 4.0f && fabsf(z) < 4.0f) continue;
+        if (t.fl[tileOf(z)][tileOf(x)] != 'X') continue;
+        if (!ROUTE[theme].empty() && glm::length(glm::vec2(x - ROUTE[theme][0].x, z - ROUTE[theme][0].z)) < 4.0f) continue;
+        if (theme == TH_BENCH && glm::length(glm::vec2(x - LADDER_XZ.x, z - LADDER_XZ.y)) < 3.0f) continue;
+        if (theme == TH_END && glm::length(glm::vec2(x + 10.0f, z + 10.0f)) < 4.0f) continue;
+        int kind = (int)rnd(0.0f, 2.999f);
+        if (kind == 0) {
+            float s = rnd(1.2f, 2.0f);
+            b.pillar(x, z, s, s, SLAB + s, crate);
+            if (rnd(0.0f, 1.0f) < 0.5f) b.pillar(x + s * 0.6f, z, s * 0.7f, s * 0.7f, SLAB + s * 0.7f, crate);
+        } else if (kind == 1) {
+            for (int i = 0; i < 3; ++i) {
+                float dx = (i - 1) * 0.85f, hh = i == 1 ? 1.6f : 1.2f;
+                b.box(CellBuilder::L(x + dx, SLAB + hh * 0.5f, z), glm::vec3(0.75f, hh, 0.75f), drum, true, glm::vec3(0.0f), false);
+                b.deco(D_STATIC, at(CellBuilder::L(x + dx, SLAB + hh * 0.5f, z)), glm::vec3(0.8f, hh, 0.8f), 1, drum);
+            }
+        } else {
+            float len = rnd(3.0f, 6.0f);
+            bool alongX = rnd(0.0f, 1.0f) < 0.5f;
+            b.box(CellBuilder::L(x, SLAB + 0.4f, z), alongX ? glm::vec3(len, 0.8f, 0.8f) : glm::vec3(0.8f, 0.8f, len), pipe, true, glm::vec3(0.0f), false);
+            b.deco(D_STATIC, at(CellBuilder::L(x, SLAB + 0.4f, z)) * (alongX ? rotZ(PI * 0.5f) : rotX(PI * 0.5f)), glm::vec3(0.8f, len, 0.8f), 1, pipe);
+        }
+        ++placed;
+    }
+}
+
 void buildGear(CellBuilder& b, const Theme& t) {
     Material brass = mat(t.accent, 0.9f, 48.0f), iron = mat(glm::vec3(0.22f, 0.2f, 0.19f), 0.5f, 32.0f);
-    float d[5][3] = { { -4, 4, 2.4f }, { 0, 4.5f, 4.4f }, { 4, 4, 6.4f }, { 4.5f, 0, 8.4f }, { 4, -4, 10.2f } };
-    for (int i = 0; i < 5; ++i) {
-        float x = d[i][0], z = d[i][1], h = d[i][2];
-        b.box(CellBuilder::L(x, h - 0.25f, z), glm::vec3(2.6f, 0.5f, 2.6f), brass, true, glm::vec3(0.0f), false);
-        b.deco(D_GEAR, at(CellBuilder::L(x, h - 0.25f, z)), glm::vec3(1.45f, 0.5f, 0), 1, brass, i % 2 ? 0.6f : -0.6f, 0, 0, 10);
-        b.deco(D_STATIC, at(CellBuilder::L(x, (SLAB + h - 0.5f) * 0.5f, z)), glm::vec3(0.35f, h - 0.5f - SLAB, 0.35f), 1, iron);
+    const auto& R = ROUTE[TH_GEAR];
+    for (size_t i = 0; i < R.size(); ++i) {
+        b.box(CellBuilder::L(R[i].x, R[i].h - 0.25f, R[i].z), glm::vec3(2.6f, 0.5f, 2.6f), brass, true, glm::vec3(0.0f), false);
+        b.deco(D_GEAR, at(CellBuilder::L(R[i].x, R[i].h - 0.25f, R[i].z)), glm::vec3(1.45f, 0.5f, 0), 1, brass, i % 2 ? 0.6f : -0.6f, 0, 0, 10);
+        b.deco(D_STATIC, at(CellBuilder::L(R[i].x, (SLAB + R[i].h - 0.5f) * 0.5f, R[i].z)), glm::vec3(0.3f, R[i].h - 0.5f - SLAB, 0.3f), 1, iron);
     }
-    b.deco(D_GEAR, at(CellBuilder::L(-5.6f, 6.5f, -2.0f)) * rotZ(PI * 0.5f), glm::vec3(3.0f, 0.4f, 0), 1, brass, 0.3f, 0, 0, 16);
-    b.deco(D_GEAR, at(CellBuilder::L(-5.6f, 2.6f, -4.2f)) * rotZ(PI * 0.5f), glm::vec3(1.6f, 0.4f, 0), 1, brass, -0.56f, 0, 0.2f, 9);
-    for (int i = 0; i < 3; ++i) b.deco(D_STATIC, at(CellBuilder::L(-4.6f + i * 0.75f, 0.9f, -1.0f)), glm::vec3(0.6f, 1.0f, 0.6f), 1, mat(glm::vec3(0.25f, 0.3f, 0.22f), 0.4f, 24.0f));
+    // 벽면 장식 톱니들 (맞물려 돈다)
+    float wg[5][4] = { { -5.0f, 8.0f, 3.0f, 0.3f }, { -9.6f, 4.0f, 1.6f, -0.56f }, { 3.0f, 15.0f, 2.4f, -0.37f }, { 7.0f, 22.0f, 1.6f, 0.56f }, { -2.0f, 24.0f, 3.0f, 0.3f } };
+    for (auto& g : wg) b.deco(D_GEAR, at(CellBuilder::L(-14.4f, g[1], g[0])) * rotZ(PI * 0.5f), glm::vec3(g[2], 0.4f, 0), 1, brass, g[3], 0, 0, (int)(g[2] * 5.0f));
 }
 
 void buildConveyor(CellBuilder& b, const Theme& t) {
     Material belt = mat(glm::vec3(0.12f, 0.12f, 0.13f), 0.3f, 24.0f), frame = mat(t.color, 0.4f, 24.0f), crate = mat(glm::vec3(0.62f, 0.45f, 0.28f), 0.1f, 8.0f, 0.0f, 2);
-    float steps[5] = { 2.4f, 4.4f, 6.4f, 8.4f, 10.2f };
-    for (int i = 0; i < 4; ++i) b.pillar(5.0f - i * 2.5f, 4.5f, 1.9f, 1.9f, steps[i], crate);
-    b.plat(-5.0f, 4.5f, 1.9f, 1.9f, 10.2f, crate, 0.6f);
-    b.deco(D_STATIC, at(CellBuilder::L(-5.0f, 5.0f, 4.5f)), glm::vec3(0.25f, 9.4f, 0.25f), 0, frame);
-    b.box(CellBuilder::L(0, SLAB + 0.25f, 0), glm::vec3(11.6f, 0.5f, 2.2f), belt, true, glm::vec3(2.4f, 0, 0));
-    b.box(CellBuilder::L(0, SLAB + 0.2f, 1.18f), glm::vec3(11.6f, 0.4f, 0.16f), frame, false);
-    b.box(CellBuilder::L(0, SLAB + 0.2f, -1.18f), glm::vec3(11.6f, 0.4f, 0.16f), frame, false);
-    for (int i = 0; i < 6; ++i) b.deco(D_SLIDE, at(CellBuilder::L(0, SLAB + 0.85f, 0)), glm::vec3(0.7f, 0.6f, 0.7f), 0, crate, 2.4f, 5.4f, i * 1.8f);
-    b.pillar(-5.0f, -5.0f, 0.25f, 0.25f, 3.2f, frame, false);
-    b.deco(D_SPIN, at(CellBuilder::L(-5.0f, 3.4f, -5.0f)), glm::vec3(0.5f, 0.35f, 0.5f), 1, mat(t.accent, 0, 1, 3.0f), 3.0f);
+    for (const auto& r : ROUTE[TH_CONVEYOR]) routePlat(b, r, 2.4f, crate, frame, 0.8f);
+    // 바닥 벨트 두 줄 (위에 서면 실려 간다)
+    b.box(CellBuilder::L(0, SLAB + 0.25f, 0), glm::vec3(26.0f, 0.5f, 2.2f), belt, true, glm::vec3(2.4f, 0, 0));
+    b.box(CellBuilder::L(-6.0f, SLAB + 0.25f, 7.5f), glm::vec3(2.2f, 0.5f, 10.0f), belt, true, glm::vec3(0, 0, -2.4f));
+    for (int s = -1; s <= 1; s += 2) b.box(CellBuilder::L(0, SLAB + 0.2f, 1.18f * s), glm::vec3(26.0f, 0.4f, 0.16f), frame, false);
+    for (int i = 0; i < 10; ++i) b.deco(D_SLIDE, at(CellBuilder::L(0, SLAB + 0.85f, 0)), glm::vec3(0.7f, 0.6f, 0.7f), 0, crate, 2.4f, 12.5f, i * 2.5f);
+    for (int i = 0; i < 4; ++i) b.deco(D_SLIDE, at(CellBuilder::L(-6.0f, SLAB + 0.85f, 7.5f)) * glm::rotate(glm::mat4(1.0f), PI * 0.5f, glm::vec3(0, 1, 0)), glm::vec3(0.7f, 0.6f, 0.7f), 0, crate, 2.4f, 4.8f, i * 2.4f);
+    for (int i = 0; i < 2; ++i) {
+        float x = i ? 12.0f : -12.0f;
+        b.pillar(x, -12.0f, 0.25f, 0.25f, 3.2f, frame, false);
+        b.deco(D_SPIN, at(CellBuilder::L(x, 3.4f, -12.0f)), glm::vec3(0.5f, 0.35f, 0.5f), 1, mat(t.accent, 0, 1, 3.0f), 3.0f);
+    }
 }
 
 void buildPress(CellBuilder& b, const Theme& t) {
     Material body = mat(t.color, 0.5f, 32.0f), dark = mat(glm::vec3(0.16f, 0.15f, 0.15f), 0.5f, 32.0f), stripe = mat(t.accent, 0.1f, 8.0f, 0.4f);
-    float p[4][3] = { { -4, 4, 3.4f }, { -4, -4, 6.4f }, { 0, -4, 8.4f }, { 4, 0, 10.2f } };
-    for (int i = 0; i < 4; ++i) {
-        float x = p[i][0], z = p[i][1], h = p[i][2];
-        b.pillar(x, z, 2.4f, 2.4f, h, i == 3 ? body : dark);
-        b.box(CellBuilder::L(x, h - 0.3f, z), glm::vec3(2.5f, 0.2f, 2.5f), stripe, false);
-        if (h < 9.0f) {
-            for (int s = -1; s <= 1; s += 2) b.deco(D_STATIC, at(CellBuilder::L(x + 1.3f * s, h + 1.7f, z)), glm::vec3(0.3f, 3.4f, 0.5f), 0, body);
-            b.deco(D_STATIC, at(CellBuilder::L(x, h + 3.5f, z)), glm::vec3(2.9f, 0.5f, 0.7f), 0, body);
-            b.deco(D_PISTON, at(CellBuilder::L(x, h + 2.9f, z)), glm::vec3(1.8f, 0.5f, 1.8f), 0, dark, 0.4f, 2.2f, i * 0.3f);
+    const auto& R = ROUTE[TH_PRESS];
+    for (size_t i = 0; i < R.size(); ++i) {
+        float x = R[i].x, z = R[i].z, h = R[i].h;
+        b.pillar(x, z, 2.6f, 2.6f, h, i + 1 == R.size() ? body : dark);
+        b.box(CellBuilder::L(x, h - 0.3f, z), glm::vec3(2.7f, 0.2f, 2.7f), stripe, false);
+        if (i % 3 == 0 && i + 1 < R.size()) {
+            for (int s = -1; s <= 1; s += 2) b.deco(D_STATIC, at(CellBuilder::L(x + 1.4f * s, h + 1.7f, z)), glm::vec3(0.3f, 3.4f, 0.5f), 0, body);
+            b.deco(D_STATIC, at(CellBuilder::L(x, h + 3.5f, z)), glm::vec3(3.1f, 0.5f, 0.7f), 0, body);
+            b.deco(D_PISTON, at(CellBuilder::L(x, h + 2.9f, z)), glm::vec3(1.9f, 0.5f, 1.9f), 0, dark, 0.4f, 2.2f, i * 0.3f);
         }
+    }
+    // 바닥의 낮은 프레스 (판금 더미 위로 내려찍는 장식)
+    for (int i = 0; i < 2; ++i) {
+        float x = i ? -10.0f : 0.0f, z = i ? 10.0f : 11.0f;
+        b.pillar(x, z, 2.4f, 2.4f, 1.0f, dark);
+        b.deco(D_PISTON, at(CellBuilder::L(x, 3.6f, z)), glm::vec3(1.8f, 0.5f, 1.8f), 0, body, 0.5f, 2.3f, i * 0.5f);
     }
 }
 
@@ -681,129 +797,149 @@ void buildBoiler(CellBuilder& b, const Theme& t) {
     b.lift(0.0f, CS);
     for (int i = -1; i <= 1; ++i) b.box(CellBuilder::L(i * 1.0f, 0.05f, 0), glm::vec3(0.12f, 0.1f, 3.2f), grate, false);
     for (int s = -1; s <= 1; s += 2) {
-        b.box(CellBuilder::L(0, SLAB + 0.05f, 2.1f * s), glm::vec3(4.4f, 0.1f, 0.2f), ring, false);
-        b.box(CellBuilder::L(2.1f * s, SLAB + 0.05f, 0), glm::vec3(0.2f, 0.1f, 4.0f), ring, false);
+        b.box(CellBuilder::L(0, 0.15f, 2.1f * s), glm::vec3(4.4f, 0.1f, 0.2f), ring, false);
+        b.box(CellBuilder::L(2.1f * s, 0.15f, 0), glm::vec3(0.2f, 0.1f, 4.0f), ring, false);
     }
-    b.pillar(-4, -4, 2.8f, 2.8f, 5.4f, shell, false);
-    b.box(CellBuilder::L(-4, 2.9f, -4), glm::vec3(2.8f, 5.0f, 2.8f), shell, true, glm::vec3(0.0f), false);
-    b.deco(D_STATIC, at(CellBuilder::L(-4, 2.9f, -4)), glm::vec3(3.3f, 5.0f, 3.3f), 1, shell);
-    b.box(CellBuilder::L(-4, 1.2f, -2.32f), glm::vec3(1.0f, 0.8f, 0.1f), fire, false);
-    b.plat(4, 4, 2.8f, 2.8f, 6.4f, pipe);
-    b.deco(D_STATIC, at(CellBuilder::L(4, 3.2f, 4)), glm::vec3(0.4f, 5.6f, 0.4f), 1, pipe);
-    b.deco(D_STATIC, at(CellBuilder::L(-1.0f, 4.8f, -4)) * rotZ(PI * 0.5f), glm::vec3(0.5f, 5.0f, 0.5f), 1, pipe);
-    vents.push_back({ b.C + b.R * CellBuilder::L(-4, 5.6f, -4), b.R * glm::vec3(0, 1, 0), 0.0f, curChunk });
+    // 승강기 둘레 쉼터 발판 (높이 10, 20)
+    for (float h : { 10.4f, 20.4f })
+        for (int k = 0; k < 4; ++k) {
+            glm::vec2 d = k == 0 ? glm::vec2(5, 0) : k == 1 ? glm::vec2(-5, 0) : k == 2 ? glm::vec2(0, 5) : glm::vec2(0, -5);
+            b.plat(d.x, d.y, 3.0f, 3.0f, h, pipe, 0.4f);
+        }
+    // 네 귀퉁이 보일러
+    for (int k = 0; k < 4; ++k) {
+        float x = k & 1 ? 10.0f : -10.0f, z = k & 2 ? 10.0f : -10.0f;
+        b.box(CellBuilder::L(x, 2.9f, z), glm::vec3(2.8f, 5.0f, 2.8f), shell, true, glm::vec3(0.0f), false);
+        b.deco(D_STATIC, at(CellBuilder::L(x, 2.9f, z)), glm::vec3(3.3f, 5.0f, 3.3f), 1, shell);
+        b.deco(D_STATIC, at(CellBuilder::L(x, 5.6f, z)), glm::vec3(2.4f, 0.4f, 2.4f), 1, pipe);
+        b.box(CellBuilder::L(x, 1.2f, z + (z < 0 ? 1.68f : -1.68f)), glm::vec3(1.0f, 0.8f, 0.1f), fire, false);
+        b.deco(D_STATIC, at(CellBuilder::L(x, 15.0f, z)), glm::vec3(0.5f, 19.0f, 0.5f), 1, pipe);
+        vents.push_back({ b.C + b.R * CellBuilder::L(x, 24.6f, z), b.R * glm::vec3(0, 1, 0), 0.0f, curChunk });
+    }
 }
 
 void buildBench(CellBuilder& b, const Theme& t) {
     Material wood = mat(glm::vec3(0.55f, 0.38f, 0.22f), 0.15f, 12.0f, 0.0f, 2), metal = mat(glm::vec3(0.62f, 0.63f, 0.66f), 1.0f, 64.0f);
     Material lamp = mat(glm::vec3(1.0f, 0.88f, 0.6f), 0.0f, 1.0f, 3.5f), shade = mat(t.color, 0.4f, 24.0f);
-    b.pillar(0, -4, 4.0f, 1.6f, 1.4f, wood);
-    for (int i = 0; i < 5; ++i) b.deco(D_SPIN, at(CellBuilder::L(-1.6f + i * 0.8f, 1.52f, -4)), glm::vec3(0.28f, 0.22f, 0.28f), 0, metal, 6.0f + i, 0, (float)i);
-    b.plat(-4, -4, 2.8f, 2.8f, 4.4f, wood, 0.4f);
+    b.ladder(LADDER_XZ.x, LADDER_XZ.y, SLAB, CS + 1.4f);
+    for (float h : { 10.4f, 20.4f }) b.plat(LADDER_XZ.x + 2.6f, LADDER_XZ.y + 1.6f, 2.4f, 2.4f, h, wood, 0.4f);
+    // 작업대 줄 + 끝없이 조여지는 볼트
+    float benches[3][4] = { { 0.0f, -10.0f, 6.0f, 1.6f }, { -10.0f, 4.0f, 1.6f, 8.0f }, { 5.0f, 8.0f, 6.0f, 1.6f } };
+    for (int k = 0; k < 3; ++k) {
+        auto& bn = benches[k];
+        b.pillar(bn[0], bn[1], bn[2], bn[3], 1.4f, wood);
+        bool alongX = bn[2] > bn[3];
+        for (int i = 0; i < 5; ++i) {
+            float o = -2.0f + i * 1.0f;
+            b.deco(D_SPIN, at(CellBuilder::L(bn[0] + (alongX ? o : 0.0f), 1.52f, bn[1] + (alongX ? 0.0f : o))), glm::vec3(0.28f, 0.22f, 0.28f), 0, metal, 6.0f + i, 0, (float)i);
+        }
+    }
+    // 선반 (2단 점프로 오르는 곳)
+    b.plat(-10.0f, -10.0f, 2.8f, 2.8f, 4.4f, wood, 0.4f);
     for (int sx = -1; sx <= 1; sx += 2)
-        for (int sz = -1; sz <= 1; sz += 2) b.deco(D_STATIC, at(CellBuilder::L(-4 + 1.2f * sx, 2.2f, -4 + 1.2f * sz)), glm::vec3(0.15f, 3.6f, 0.15f), 0, wood);
-    b.ladder(4.0f, -5.4f, SLAB, CS + 1.4f);
-    b.deco(D_HAND, at(CellBuilder::L(-5.6f, 7.0f, 2.5f)) * rotZ(-PI * 0.5f), glm::vec3(2.4f, 0.15f, 0.45f), 0, metal, 0.6f, 0.35f, 1.0f);
-    for (int i = 0; i < 2; ++i) {
-        float x = -1.5f + i * 3.0f;
-        b.deco(D_STATIC, at(CellBuilder::L(x, 9.0f, 1.5f)), glm::vec3(0.05f, 3.0f, 0.05f), 0, metal);
-        b.deco(D_STATIC, at(CellBuilder::L(x, 7.4f, 1.5f)), glm::vec3(0.9f, 0.4f, 0.9f), 1, shade);
-        b.deco(D_STATIC, at(CellBuilder::L(x, 7.15f, 1.5f)), glm::vec3(0.5f, 0.12f, 0.5f), 1, lamp);
+        for (int sz = -1; sz <= 1; sz += 2) b.deco(D_STATIC, at(CellBuilder::L(-10.0f + 1.2f * sx, 2.2f, -10.0f + 1.2f * sz)), glm::vec3(0.15f, 3.6f, 0.15f), 0, wood);
+    b.deco(D_HAND, at(CellBuilder::L(-14.5f, 9.0f, 6.0f)) * rotZ(-PI * 0.5f), glm::vec3(2.4f, 0.15f, 0.45f), 0, metal, 0.6f, 0.35f, 1.0f);
+    for (int i = 0; i < 4; ++i) {
+        float x = -6.0f + i * 4.0f;
+        b.deco(D_STATIC, at(CellBuilder::L(x, 12.0f, 4.0f)), glm::vec3(0.05f, 6.0f, 0.05f), 0, metal);
+        b.deco(D_STATIC, at(CellBuilder::L(x, 8.9f, 4.0f)), glm::vec3(0.9f, 0.4f, 0.9f), 1, shade);
+        b.deco(D_STATIC, at(CellBuilder::L(x, 8.65f, 4.0f)), glm::vec3(0.5f, 0.12f, 0.5f), 1, lamp);
     }
 }
 
 void buildSupervisor(CellBuilder& b, const Theme& t) {
     Material frame = mat(glm::vec3(0.12f, 0.12f, 0.14f), 0.4f, 32.0f), screen = mat(t.accent, 0.0f, 1.0f, 1.6f), ink = mat(glm::vec3(0.05f));
-    Material desk = mat(glm::vec3(0.4f, 0.24f, 0.14f), 0.3f, 24.0f, 0.0f, 2), cab = mat(t.color, 0.5f, 32.0f), walk = mat(glm::vec3(0.3f, 0.3f, 0.33f), 0.6f, 32.0f);
-    b.pillar(-5.0f, -4.5f, 2.0f, 2.0f, 2.4f, cab);
-    b.pillar(-2.5f, -4.5f, 2.0f, 2.0f, 4.4f, cab);
-    b.pillar(0.0f, -4.5f, 2.0f, 2.0f, 6.4f, cab);
-    b.plat(3.5f, -4.5f, 5.0f, 3.0f, 6.4f, walk, 0.4f);
-    b.plat(4.75f, 1.5f, 2.5f, 9.0f, 6.4f, walk, 0.4f);
-    b.box(CellBuilder::L(4.75f, 7.4f, 1.5f), glm::vec3(2.0f, 2.0f, 2.0f), desk);
-    b.plat(1.5f, 4.5f, 2.4f, 2.4f, 10.2f, walk);
-    b.deco(D_STATIC, at(CellBuilder::L(1.5f, 5.1f, 4.5f)), glm::vec3(0.2f, 9.6f, 0.2f), 0, frame);
-    // 벽 한 면을 차지하는 감시 화면 + 감독관 얼굴
-    b.box(CellBuilder::L(-5.75f, 7.0f, 1.0f), glm::vec3(0.3f, 4.4f, 6.0f), frame, false);
-    b.box(CellBuilder::L(-5.58f, 7.0f, 1.0f), glm::vec3(0.06f, 3.8f, 5.4f), screen, false);
-    b.box(CellBuilder::L(-5.53f, 7.6f, 0.0f), glm::vec3(0.04f, 0.35f, 0.6f), ink, false);
-    b.box(CellBuilder::L(-5.53f, 7.6f, 2.0f), glm::vec3(0.04f, 0.35f, 0.6f), ink, false);
-    b.box(CellBuilder::L(-5.53f, 6.1f, 1.0f), glm::vec3(0.04f, 0.25f, 1.8f), ink, false);
-    b.pillar(-4, 0, 1.5f, 2.6f, 1.3f, desk);
+    Material desk = mat(glm::vec3(0.4f, 0.24f, 0.14f), 0.3f, 24.0f, 0.0f, 2), cab = mat(t.color, 0.5f, 32.0f);
+    for (const auto& r : ROUTE[TH_SUPERVISOR]) routePlat(b, r, 2.2f, cab, frame, 0.6f);
+    // 벽 한 면의 감시 화면 세 개 + 감독관 얼굴
+    for (int k = -1; k <= 1; ++k) {
+        float z = k * 8.0f, y = 14.0f + (k == 0 ? 4.0f : 0.0f);
+        b.box(CellBuilder::L(-14.75f, y, z), glm::vec3(0.3f, 4.4f, 6.0f), frame, false);
+        b.box(CellBuilder::L(-14.58f, y, z), glm::vec3(0.06f, 3.8f, 5.4f), screen, false);
+        b.box(CellBuilder::L(-14.53f, y + 0.6f, z - 1.0f), glm::vec3(0.04f, 0.35f, 0.6f), ink, false);
+        b.box(CellBuilder::L(-14.53f, y + 0.6f, z + 1.0f), glm::vec3(0.04f, 0.35f, 0.6f), ink, false);
+        b.box(CellBuilder::L(-14.53f, y - 0.9f, z), glm::vec3(0.04f, 0.25f, 1.8f), ink, false);
+    }
+    // 책상 줄
+    for (int i = 0; i < 3; ++i) b.pillar(-6.0f + i * 6.0f, 6.0f, 2.6f, 1.5f, 1.3f, desk);
 }
 
 void buildFeeding(CellBuilder& b, const Theme& t) {
     Material steel = mat(t.color, 0.8f, 48.0f), corn = mat(glm::vec3(0.98f, 0.82f, 0.25f), 0.3f, 16.0f, 0.2f), plate = mat(glm::vec3(0.92f, 0.9f, 0.86f), 0.6f, 32.0f);
     Material table = mat(glm::vec3(0.5f, 0.32f, 0.2f), 0.2f, 12.0f, 0.0f, 2);
-    b.pad(-4, -4, 2.2f, 0.9f, 14.5f);
-    b.plat(-4, 0.5f, 3.0f, 3.0f, 5.2f, steel);
-    b.deco(D_STATIC, at(CellBuilder::L(-4, 2.6f, 0.5f)), glm::vec3(0.3f, 4.6f, 0.3f), 1, steel);
-    b.pad(-4.3f, 1.2f, 1.4f, 5.5f, 15.5f);
-    b.plat(0, 4, 2.8f, 2.8f, 10.2f, steel);
-    b.deco(D_STATIC, at(CellBuilder::L(0, 5.1f, 4)), glm::vec3(0.3f, 9.6f, 0.3f), 1, steel);
-    b.pillar(4, -4, 2.2f, 2.2f, 3.4f, steel);
-    b.box(CellBuilder::L(2.6f, 3.0f, -4), glm::vec3(1.0f, 0.3f, 0.3f), steel, false);
-    b.deco(D_SPIN, at(CellBuilder::L(1.8f, 3.0f, -4)) * rotZ(PI * 0.5f), glm::vec3(0.35f, 1.2f, 0.35f), 1, corn, 9.0f);
-    b.pillar(0, -4, 2.4f, 1.6f, 1.2f, table);
-    b.deco(D_SPIN, at(CellBuilder::L(0, 1.25f, -4)), glm::vec3(1.2f, 0.08f, 1.2f), 1, plate, 1.4f);
+    const float PAD_V = 17.3f;     // 다음 발판(+5.5)보다 1.6 정도 높이 튀어 오른다
+    b.pad(PAD0_XZ.x, PAD0_XZ.y, 2.2f, 0.9f, PAD_V);
+    const auto& R = ROUTE[TH_FEEDING];
+    for (size_t i = 0; i < R.size(); ++i) {
+        routePlat(b, R[i], 3.0f, steel, steel);
+        if (i + 1 < R.size()) b.pad(R[i].x + 0.6f, R[i].z + 0.6f, 1.4f, R[i].h + 0.3f, PAD_V);
+    }
+    // 급식 기계 + 식탁
+    b.pillar(-11.0f, 11.0f, 2.2f, 2.2f, 3.4f, steel);
+    b.box(CellBuilder::L(-9.6f, 3.0f, 11.0f), glm::vec3(1.0f, 0.3f, 0.3f), steel, false);
+    b.deco(D_SPIN, at(CellBuilder::L(-8.8f, 3.0f, 11.0f)) * rotZ(PI * 0.5f), glm::vec3(0.35f, 1.2f, 0.35f), 1, corn, 9.0f);
+    for (int i = 0; i < 2; ++i) {
+        float z = -2.0f + i * 5.0f;
+        b.pillar(-11.0f, z, 2.4f, 4.0f, 1.2f, table);
+        b.deco(D_SPIN, at(CellBuilder::L(-11.0f, 1.25f, z)), glm::vec3(1.2f, 0.08f, 1.2f), 1, plate, 1.4f);
+    }
 }
 
 void buildClock(CellBuilder& b, const Theme& t) {
     Material face = mat(glm::vec3(0.93f, 0.9f, 0.8f), 0.2f, 16.0f, 0.25f), ink = mat(glm::vec3(0.06f), 0.3f, 16.0f), rim = mat(t.color, 0.8f, 48.0f);
     Material locker = mat(t.color * 0.8f, 0.5f, 32.0f);
-    float l[4][3] = { { 5, -5, 2.4f }, { 5, -2.5f, 4.4f }, { 5, 0, 6.4f }, { 5, 2.5f, 8.4f } };
-    for (auto& v : l) b.pillar(v[0], v[1], 1.8f, 1.8f, v[2], locker);
-    b.plat(2.5f, 5.0f, 2.0f, 2.0f, 10.2f, rim);
-    b.deco(D_STATIC, at(CellBuilder::L(2.5f, 5.1f, 5.0f)), glm::vec3(0.2f, 9.6f, 0.2f), 0, rim);
-    // -Z 쪽 큰 시계 (문자판이 +Z 를 본다)
-    glm::mat4 wall = at(CellBuilder::L(-1.5f, 6.5f, -5.75f)) * rotX(PI * 0.5f);
-    b.deco(D_STATIC, wall, glm::vec3(5.2f, 0.3f, 5.2f), 1, rim);
-    b.deco(D_STATIC, wall * at(0, 0.1f, 0), glm::vec3(4.6f, 0.2f, 4.6f), 1, face);
-    for (int i = 0; i < 12; ++i)
-        b.deco(D_STATIC, wall * glm::rotate(glm::mat4(1.0f), i * PI / 6.0f, glm::vec3(0, 1, 0)) * at(1.95f, 0.22f, 0), glm::vec3(i % 3 == 0 ? 0.5f : 0.28f, 0.06f, 0.12f), 0, ink);
-    b.deco(D_HAND, wall * at(0, 0.26f, 0), glm::vec3(1.9f, 0.05f, 0.14f), 0, ink, 1.2f, 0, 0);
-    b.deco(D_HAND, wall * at(0, 0.3f, 0), glm::vec3(1.3f, 0.05f, 0.22f), 0, ink, 0.1f, 0, 1.0f);
-    b.pillar(-4, 4, 1.2f, 0.8f, 1.9f, rim);
+    for (const auto& r : ROUTE[TH_CLOCK]) b.pillar(r.x, r.z, 1.9f, 1.9f, r.h, locker);
+    // -Z 벽의 큰 시계 두 개 (문자판이 +Z 를 본다)
+    for (int k = 0; k < 2; ++k) {
+        glm::mat4 wall = at(CellBuilder::L(k ? 6.0f : -5.0f, k ? 20.0f : 9.0f, -14.75f)) * rotX(PI * 0.5f);
+        b.deco(D_STATIC, wall, glm::vec3(5.2f, 0.3f, 5.2f), 1, rim);
+        b.deco(D_STATIC, wall * at(0, 0.1f, 0), glm::vec3(4.6f, 0.2f, 4.6f), 1, face);
+        for (int i = 0; i < 12; ++i)
+            b.deco(D_STATIC, wall * glm::rotate(glm::mat4(1.0f), i * PI / 6.0f, glm::vec3(0, 1, 0)) * at(1.95f, 0.22f, 0), glm::vec3(i % 3 == 0 ? 0.5f : 0.28f, 0.06f, 0.12f), 0, ink);
+        b.deco(D_HAND, wall * at(0, 0.26f, 0), glm::vec3(1.9f, 0.05f, 0.14f), 0, ink, 1.2f + k, 0, 0);
+        b.deco(D_HAND, wall * at(0, 0.3f, 0), glm::vec3(1.3f, 0.05f, 0.22f), 0, ink, 0.1f, 0, 1.0f);
+    }
+    // 출퇴근 카드 기계 줄
+    for (int i = 0; i < 3; ++i) b.pillar(-10.0f + i * 2.0f, 10.0f, 1.2f, 0.8f, 1.9f, rim);
 }
 
 void buildStart(CellBuilder& b, const Theme& t) {
     Material green = mat(t.color, 0.4f, 24.0f), lamp = mat(t.accent, 0, 1, 2.5f), iron = mat(glm::vec3(0.2f), 0.5f, 32.0f);
-    float s[4] = { 2.4f, 4.4f, 6.4f, 8.4f };
-    for (int i = 0; i < 4; ++i) b.pillar(-5.0f + i * 2.5f, 4.5f, 1.9f, 1.9f, s[i], green);
-    b.plat(5.0f, 4.5f, 1.9f, 1.9f, 10.2f, green);
-    b.deco(D_STATIC, at(CellBuilder::L(5.0f, 5.0f, 4.5f)), glm::vec3(0.25f, 9.4f, 0.25f), 0, iron);
+    for (const auto& r : ROUTE[TH_START]) routePlat(b, r, 2.2f, green, iron, 0.6f);
     // 출근 게이트 아치
-    b.pillar(-5.0f, -1.0f, 0.4f, 0.4f, 4.6f, iron, false);
-    b.pillar(-1.0f, -1.0f, 0.4f, 0.4f, 4.6f, iron, false);
-    b.box(CellBuilder::L(-3.0f, 4.7f, -1.0f), glm::vec3(4.4f, 0.4f, 0.4f), green, false);
-    b.deco(D_SPIN, at(CellBuilder::L(-3.0f, 5.2f, -1.0f)), glm::vec3(0.5f, 0.4f, 0.5f), 1, lamp, 2.0f);
+    b.pillar(-9.0f, -2.0f, 0.4f, 0.4f, 4.6f, iron, false);
+    b.pillar(-3.0f, -2.0f, 0.4f, 0.4f, 4.6f, iron, false);
+    b.box(CellBuilder::L(-6.0f, 4.7f, -2.0f), glm::vec3(6.4f, 0.4f, 0.4f), green, false);
+    b.deco(D_SPIN, at(CellBuilder::L(-6.0f, 5.2f, -2.0f)), glm::vec3(0.5f, 0.4f, 0.5f), 1, lamp, 2.0f);
 }
 
 void buildEnd(CellBuilder& b, const Theme& t, bool isGoal) {
     Material brass = mat(t.accent, 1.0f, 64.0f, 0.2f), iron = mat(glm::vec3(0.2f), 0.5f, 32.0f), glow = mat(glm::vec3(1.0f, 0.9f, 0.5f), 0, 1, 3.0f);
-    b.pillar(-4, -4, 1.8f, 1.8f, 1.2f, iron);
-    b.deco(D_STATIC, at(CellBuilder::L(-4, 4.0f, -4)), glm::vec3(0.5f, 5.6f, 0.5f), 1, brass);
-    b.deco(D_STATIC, at(CellBuilder::L(-4, 7.2f, -4)), glm::vec3(1.0f, 1.0f, 1.0f), 1, brass);
-    b.deco(D_STATIC, at(CellBuilder::L(-4, 7.9f, -4)), glm::vec3(1.4f, 0.3f, 1.4f), 1, brass);
-    b.deco(D_SPIN, at(CellBuilder::L(-4, 2.6f, -4)) * rotZ(PI * 0.5f), glm::vec3(0.3f, 1.4f, 0.3f), 1, glow, isGoal ? 1.0f : 0.0f);
-    if (isGoal) goalPos = b.C + b.R * CellBuilder::L(-4, 2.2f, -4);
+    float x = -10.0f, z = -10.0f;
+    b.pillar(x, z, 1.8f, 1.8f, 1.2f, iron);
+    b.deco(D_STATIC, at(CellBuilder::L(x, 4.0f, z)), glm::vec3(0.5f, 5.6f, 0.5f), 1, brass);
+    b.deco(D_STATIC, at(CellBuilder::L(x, 7.2f, z)), glm::vec3(1.0f, 1.0f, 1.0f), 1, brass);
+    b.deco(D_STATIC, at(CellBuilder::L(x, 7.9f, z)), glm::vec3(1.4f, 0.3f, 1.4f), 1, brass);
+    b.deco(D_SPIN, at(CellBuilder::L(x, 2.6f, z)) * rotZ(PI * 0.5f), glm::vec3(0.3f, 1.4f, 0.3f), 1, glow, isGoal ? 1.0f : 0.0f);
+    if (isGoal) goalPos = b.C + b.R * CellBuilder::L(x, 2.2f, z);
 }
 
-// 블럭 공통: 타일 바닥(구멍 포함) + 가장자리 띠 + 컨셉 맵
-void buildCell(int theme, const glm::mat3& R, glm::vec3 C, bool isGoal = false) {
+// 블럭 공통: 타일 바닥(구멍 포함) + 가장자리 띠 + 컨셉 맵 + 바닥 장애물
+void buildCell(int theme, const glm::mat3& R, glm::vec3 C, bool isGoal, unsigned seed) {
     CellBuilder b{ R, C };
     const Theme& t = THEMES[theme];
     Material floorM = mat(t.floor, 0.25f, 24.0f, 0.0f, 1), trim = mat(t.color, 0.3f, 24.0f, 0.2f);
+    float e = HALF - 0.15f;
     for (int tz = 0; tz < 3; ++tz)
         for (int tx = 0; tx < 3; ++tx) {
             if (t.fl[tz][tx] != 'X') continue;
-            float x = -4.0f + 4.0f * tx, z = -4.0f + 4.0f * tz;
-            b.box(CellBuilder::L(x, SLAB * 0.5f, z), glm::vec3(4.0f, SLAB, 4.0f), floorM);
+            float x = -TILE + TILE * tx, z = -TILE + TILE * tz;
+            b.box(CellBuilder::L(x, SLAB * 0.5f, z), glm::vec3(TILE, SLAB, TILE), floorM);
             // 블럭 경계 쪽 가장자리에 컨셉 색 띠 (벽은 없지만 어느 블럭인지 보이게)
-            if (tx == 0) b.box(CellBuilder::L(-5.9f, SLAB + 0.03f, z), glm::vec3(0.2f, 0.06f, 4.0f), trim, false);
-            if (tx == 2) b.box(CellBuilder::L(5.9f, SLAB + 0.03f, z), glm::vec3(0.2f, 0.06f, 4.0f), trim, false);
-            if (tz == 0) b.box(CellBuilder::L(x, SLAB + 0.03f, -5.9f), glm::vec3(4.0f, 0.06f, 0.2f), trim, false);
-            if (tz == 2) b.box(CellBuilder::L(x, SLAB + 0.03f, 5.9f), glm::vec3(4.0f, 0.06f, 0.2f), trim, false);
+            if (tx == 0) b.box(CellBuilder::L(-e, SLAB + 0.03f, z), glm::vec3(0.3f, 0.06f, TILE), trim, false);
+            if (tx == 2) b.box(CellBuilder::L(e, SLAB + 0.03f, z), glm::vec3(0.3f, 0.06f, TILE), trim, false);
+            if (tz == 0) b.box(CellBuilder::L(x, SLAB + 0.03f, -e), glm::vec3(TILE, 0.06f, 0.3f), trim, false);
+            if (tz == 2) b.box(CellBuilder::L(x, SLAB + 0.03f, e), glm::vec3(TILE, 0.06f, 0.3f), trim, false);
         }
     switch (theme) {
     case TH_GEAR: buildGear(b, t); break;
@@ -817,6 +953,8 @@ void buildCell(int theme, const glm::mat3& R, glm::vec3 C, bool isGoal = false) 
     case TH_START: buildStart(b, t); break;
     case TH_END: buildEnd(b, t, isGoal); break;
     }
+    std::mt19937 r(seed * 2654435761u + (unsigned)theme);
+    addClutter(b, theme, r, theme >= TH_START ? 3 : 6);
 }
 
 // 다단블럭 껍데기: 씬 안쪽을 향하는 면은 나사 4개로 잠긴 패널
@@ -861,7 +999,7 @@ void buildPiece(int pi) {
     curChunk = pi;
     auto sc = shapeCells(p, p.rot);
     for (size_t k = 0; k < sc.size(); ++k)
-        buildCell(p.cells[k].theme, contentRot(p.rot, p.cells[k]), cellWorldCenter(p.pos + sc[k]), false);
+        buildCell(p.cells[k].theme, contentRot(p.rot, p.cells[k]), cellWorldCenter(p.pos + sc[k]), false, p.cells[k].seed);
     if (p.custom) buildPanels(pi);
     curChunk = -1;
 }
@@ -885,9 +1023,9 @@ void buildWorld() {
     addBox({ -W * 0.5f - 0.5f, H * 0.5f, 0 }, { 1.0f, H, W }, brick);
     int P = (int)pieces.size();
     curChunk = P;
-    buildCell(TH_START, glm::mat3(1.0f), cellWorldCenter(startCell));
+    buildCell(TH_START, glm::mat3(1.0f), cellWorldCenter(startCell), false, 11u);
     curChunk = P + 1;
-    buildCell(TH_END, glm::mat3(1.0f), cellWorldCenter(endCell), true);
+    buildCell(TH_END, glm::mat3(1.0f), cellWorldCenter(endCell), true, 23u);
     curChunk = -1;
     for (int p = 0; p < P; ++p)
         if (pieces[p].placed) buildPiece(p);
@@ -1012,7 +1150,7 @@ glm::mat4 chunkXform(int ch) {
 
 void spawnAtStart() {
     glm::vec3 c = cellWorldCenter(startCell);
-    pl.pos = c + glm::vec3(-3.0f, -HALF + SLAB, -3.0f);
+    pl.pos = c + glm::vec3(-6.0f, -HALF + SLAB, -6.0f);
     pl.vel = glm::vec3(0.0f);
     pl.onGround = false;
     camYaw = PI * 0.75f;
@@ -1763,7 +1901,7 @@ void renderWorld(int w, int h) {
     glUniform3f(sl.groundAmb, 0.32f, 0.27f, 0.23f);
     glUniform3fv(sl.viewPos, 1, glm::value_ptr(desired));
     glUniform3fv(sl.fogColor, 1, glm::value_ptr(SKY_HORIZON));
-    glUniform1f(sl.fogDensity, 0.008f);
+    glUniform1f(sl.fogDensity, 0.0035f);
     glUniform1f(sl.farPlane, FAR_PLANE);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, shadowTex);
@@ -2478,7 +2616,11 @@ void buildScript() {
               }
               openEdit();
               autoSolve();
-              if (target >= 0 && pieces[target].cells.size() == 1) pieces[target].rot = quarterTurn(1, 1);
+              rebuildOcc();
+              // 같은 자리에 들어가는 다른 회전을 찾아서 돌린다
+              if (target >= 0)
+                  for (const auto& r : ROTS)
+                      if (r != pieces[target].rot && canPlace(pieces[target], r, pieces[target].pos, target)) { pieces[target].rot = r; break; }
               rebuildOcc();
               closeEdit();
               std::cout << "[test] rider piece " << (riderPiece >= 0 ? trEvents[riderPiece].piece : -1) << " target " << target << "\n";
@@ -2586,9 +2728,24 @@ int main(int argc, char** argv) {
     createShadowMap();
 
     initRotations();
+    initThemes();
     stage = 0;
     startStage();
-    if (shotMode) buildScript();
+    if (shotMode) {
+        // 오르막 경로 점검: 발판 사이 오름 높이와 가장자리 간격 (점프 2.3 / 2단 3.1)
+        for (int t = 0; t < 10; ++t) {
+            const auto& R = ROUTE[t];
+            if (R.empty()) continue;
+            float maxRise = 0.0f, maxGap = 0.0f;
+            for (size_t i = 1; i < R.size(); ++i) {
+                maxRise = std::max(maxRise, R[i].h - R[i - 1].h);
+                maxGap = std::max(maxGap, glm::length(glm::vec2(R[i].x - R[i - 1].x, R[i].z - R[i - 1].z)) - 2.2f);
+            }
+            std::cout << "[route] " << THEMES[t].name << " steps " << R.size() << " top " << R.back().h << " exit tile " << EXIT_T[t][0] << "," << EXIT_T[t][1]
+                      << " first tile solid " << (THEMES[t].fl[tileOf(R[0].z)][tileOf(R[0].x)] == 'X') << " max rise " << maxRise << " max gap " << maxGap << std::endl;
+        }
+        buildScript();
+    }
 
     std::cout << "=== Prototype v2 : 씬 조립 플랫포머 ===\n"
               << "[씬]   WASD 이동, 마우스 시점, Space 점프 (달리며 연속 3단), Shift 달리기\n"
